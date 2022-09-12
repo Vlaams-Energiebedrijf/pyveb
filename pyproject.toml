@@ -2,13 +2,14 @@
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
-[project]
-name = "pyveb"
+[tool.poetry]
 version = "0.1.26"
-authors = [
-  { name="pieter de petter", email="pieter.de.petter@veb.be" },
-]
+name = "pyveb"
+authors = ["pieter <pieter.de.petter@veb.be>"]
 description = "Package containing common code and reusable components for pipelines and dags"
+
+[project]
+
 readme = "README.md"
 license = { file="LICENSE" }
 requires-python = ">=3.7"

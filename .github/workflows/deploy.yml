@@ -1,0 +1,27 @@
+name: Build & Deploy python package 
+
+on:
+  pull_request:
+    branches:
+      - 'main'
+    paths: # only trigger docker builds when changes are made to src
+      - 'src/pyveb/**'
+
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        run: poetry version patch
+      - name: Cleanup old dist
+        run: |
+          cd common_code
+          rm -rf dist
+          python3 -m build
+      - name: Publish a Python distribution to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}

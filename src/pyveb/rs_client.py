@@ -3,6 +3,9 @@ import os, sys
 import logging
 import pandas as pd
 import json
+from io import BytesIO
+import boto3
+from time import time
 
 class rsClient():
     def __init__(self, env, rs_iam_role):
@@ -52,7 +55,6 @@ class rsClient():
         self._enable_autocommit() 
         self._query(f"""ALTER TABLE {rs_stage} DROP COLUMN meta_loading_date_utc""")
         self._disable_autocommit()
-
 
     def _copy_parquet_into_stage(self, files, rs_stage):
         for file in files:
@@ -125,7 +127,6 @@ class rsClient():
                 logging.error(f'message: {e}', exc_info=True)
                 sys.exit(1)
     
-    
     # TO DO 
     def _append(self):
         None
@@ -154,7 +155,6 @@ class rsClient():
         self._upsert(rs_target, rs_stage, upsert_keys)
         return
 
-
     def full_refresh(self,files, rs_target_schema, rs_target_table):
         """
             ARGUMENTS
@@ -175,7 +175,6 @@ class rsClient():
         self._copy_parquet_into_stage(files, rs_stage)
         self._full_refresh(rs_target, rs_stage)
         return
-
 
      # Not tested yet
     def load_copy_csv(self, s3_bucket, s3_prefix, rs_target, iam_role, delimiter, columns=None, timeformat='YYYY-MM-DDTHH:MI:SS'):
@@ -245,7 +244,6 @@ class rsClient():
         api_queries = [json.dumps({api_query_params: x}) for x in input_list]
         return api_queries
 
-
     def rs_column_to_list(self, rs_source_schema:str, rs_source_table:str, rs_source_column:str):
         dml = f"""
             SELECT "{rs_source_column}" from {rs_source_schema}.{rs_source_table} where "{rs_source_column}" is not null
@@ -267,3 +265,44 @@ class rsClient():
         path_params= df[rs_source_column].tolist()
         return path_params
 
+    def stream_to_s3_parquet(self, query:str, batch_size:int, s3_bucket:str, s3_prefix:str, s3_filename:str) -> None:
+        """
+            Streams the results of a sql query to parquet files on s3 with 'batch_size' nbr of rows per file. 
+            Output files have the following key:
+                {s3_bucket}{s3_prefix}{timestamp}_{filename}.parquet        
+        """
+        for rows, cols in self._stream_results(query, batch_size):
+            get_data = [x for x in rows]
+            col_names = [y[0] for y in cols]
+            df = pd.DataFrame(get_data)
+            df.columns = col_names
+            # col_names = [column[0] for column in x[0].cursor_description]
+            # df = pd.DataFrame.from_records(x, columns=col_names)
+            self._df_to_parquet_s3(df, s3_bucket, s3_prefix, s3_filename)
+        return
+
+                
+    def _stream_results(self, query:str, batch_size: int):
+        cursor = self.conn.cursor()
+        cursor.itersize = batch_size
+        cursor.execute(query)
+        while True:
+            rows = cursor.fetchmany(batch_size)
+            cols = cursor.description
+            if not rows:
+                break
+            yield rows, cols
+            # for row in rows:
+            #     yield row
+
+    
+    def _df_to_parquet_s3(self, df:pd.DataFrame, s3_bucket: str, s3_prefix: str, file_name:str):
+        parquet_buffer = BytesIO()
+        df.to_parquet(parquet_buffer, index=False, allow_truncated_timestamps=True)
+        s3 = boto3.resource('s3')
+        timestamp = round(time(), 4)
+        s3_key = f"{s3_prefix}{timestamp}_{file_name}.parquet"
+        s3.Object(s3_bucket, s3_key).put(Body=parquet_buffer.getvalue())
+        logging.info(f'Stored {s3_key} on s3 {s3_bucket}')
+        del df
+        return
