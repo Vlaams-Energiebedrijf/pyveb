@@ -289,6 +289,7 @@ class rsClient():
             if not rows:
                 break
             yield rows, cols
+            
 
     def _df_to_parquet_s3(self, df:pd.DataFrame, s3_bucket: str, s3_prefix: str, file_name:str):
         parquet_buffer = BytesIO()
