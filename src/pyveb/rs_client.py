@@ -276,12 +276,9 @@ class rsClient():
             col_names = [y[0] for y in cols]
             df = pd.DataFrame(get_data)
             df.columns = col_names
-            # col_names = [column[0] for column in x[0].cursor_description]
-            # df = pd.DataFrame.from_records(x, columns=col_names)
             self._df_to_parquet_s3(df, s3_bucket, s3_prefix, s3_filename)
         return
-
-                
+      
     def _stream_results(self, query:str, batch_size: int):
         cursor = self.conn.cursor()
         cursor.itersize = batch_size
@@ -292,10 +289,7 @@ class rsClient():
             if not rows:
                 break
             yield rows, cols
-            # for row in rows:
-            #     yield row
 
-    
     def _df_to_parquet_s3(self, df:pd.DataFrame, s3_bucket: str, s3_prefix: str, file_name:str):
         parquet_buffer = BytesIO()
         df.to_parquet(parquet_buffer, index=False, allow_truncated_timestamps=True)
