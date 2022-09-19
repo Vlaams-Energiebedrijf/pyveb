@@ -4,6 +4,7 @@ import random
 from time import sleep
 import logging
 import ast
+import sys, os
 
 class basicAPI():
 
@@ -96,3 +97,56 @@ class basicAPI():
             logging.error("Error closing API session")
 
 
+class CogeniusAPI():
+    def __init__(self, endpoint):
+        try:
+            COGENIUS_API_KEY=os.environ[f'COGENIUS_API_KEY']
+            COGENIUS_API_ENDPOINT = os.environ[f'COGENIUS_API_ENDPOINT']
+            logging.info("Found cogenius credentials in os.environ")
+        except Exception as e:
+            logging.error("No cogenius credentials found in os.environ. Exiting...")
+            logging.error(e)
+            sys.exit(1)
+        self.endpoint_url = f'{COGENIUS_API_ENDPOINT}{endpoint}'
+        logging.info(self.endpoint_url)
+        self.headers = {
+            'X-API-KEY' : COGENIUS_API_KEY,
+            'Accept': 'application/json'
+        } 
+        self.session = requests.Session()
+        self.session.headers.update(self.headers)
+        return 
+
+    def fetch(self, query, retries=3, backoff_in_seconds=1):
+        """
+            returns response_dictionary or a runtimeError
+            query: stringified dictionary, eg. '{'ean': 12345}'
+        """
+        x = 0
+        while True:
+            try:
+                return self._fetch(query)
+            except RuntimeError:
+                if x == int(retries)-1:
+                    raise RuntimeError(f'No 200 response after {retries} tries for query: {json.loads(query)}')
+                else:
+                    logging.warning(f'Trying again ... query: {json.loads(query)}')
+                    sleep_duration = (int(backoff_in_seconds) * 2 ** x + random.uniform(0, 1))
+                    sleep(sleep_duration)
+                    x += 1
+
+    def _fetch(self, query):
+        response = self.session.get(self.endpoint_url, params = json.loads(query))
+        if response.status_code != 200:
+            raise RuntimeError(f' {response.status_code} response for {json.loads(query)}')
+        response_dict=json.loads(response.text)
+        return response_dict
+
+    def close_session(self):
+        try:
+            self.session.close()
+            logging.info("Closed cogenius API session")
+        except Exception as e:
+            logging.error("Error closing cogenius session")
+        
+        
