@@ -13,15 +13,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.head_ref }}
       - name: Install Poetry
         uses: snok/install-poetry@v1
+      - name: bump version
         run: poetry version patch
-      - name: Cleanup old dist
-        run: |
-          cd common_code
-          rm -rf dist
-          python3 -m build
+      - name: Commit bumped version
+        uses: EndBug/add-and-commit@v9 
+        with:
+          add: '*.toml'
+          author_name: Github CICD Action 
+          committer_name: Github CICD Action 
+          message: 'Bump version via Github Actions'
+      - name: build with poetry
+        run: poetry build
       - name: Publish a Python distribution to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
+      - name: Commit bumped version
+        uses: EndBug/add-and-commit@v9 
+        with:
+          author_name: Github CICD Action 
+          committer_name: Github CICD Action 
+          fetch: false
+          message: 'Bump version via Github Actions'
+          pathspec_error_handling: ignore
