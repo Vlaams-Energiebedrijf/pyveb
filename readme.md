@@ -22,9 +22,13 @@ Upload package: https://packaging.python.org/en/latest/tutorials/packaging-proje
 1.  update version in ~/pyproject.toml
 2.  deploy to pypi
 
-    - $ cd common_code
+
+TBD 
+
+We bump the version automatically within the github action and commit the changes back to the branch
+
     - $ rm -rf dist
-    - $ python3 -m build
+    - $ poetry
     - $ python3 -m twine upload dist/*
     - $ rm -rf dist
 

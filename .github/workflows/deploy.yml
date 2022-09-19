@@ -23,3 +23,12 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
+      - uses: EndBug/add-and-commit@v9 # You can change this to use a specific version.
+        with:
+          add: 'pyproject.toml'
+          author_name: Github CICD Action 
+          committer_name: Github CICD Action 
+          cwd: './path/to/the/repo'
+          fetch: false
+          message: 'Bump version via Github Actions'
+          pathspec_error_handling: ignore
