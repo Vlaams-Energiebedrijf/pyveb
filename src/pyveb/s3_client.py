@@ -101,8 +101,8 @@ class s3Client():
                 If yes, prefix ( ie all folders, subfolders and files) will be deleted. 
         """
         try: 
-            data_exists, subdir_exists = self._prefix_exist_and_not_empty(s3_prefix)
-            if data_exists or subdir_exists:
+            data_exist, subdir_exist = self._prefix_exist_and_not_empty(s3_prefix)
+            if data_exist or subdir_exist:
                 self._delete_prefix(s3_prefix)
                 logging.warning(f'Found and deleted prefix {s3_prefix}.')
             else:
