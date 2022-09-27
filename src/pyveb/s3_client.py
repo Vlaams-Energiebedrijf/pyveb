@@ -86,7 +86,7 @@ class s3Client():
         if not s3_prefix.endswith('/'):
             s3_prefix = s3_prefix+'/' 
         resp = self.client.list_objects(Bucket=self.bucket_name, Prefix=s3_prefix, Delimiter='/', MaxKeys=1)
-        return 'Contents' in resp
+        return 'Contents' in resp, 'CommonPrefixes' in resp
 
     def delete_prefix_if_exist(self, s3_prefix:str) -> None:
         """
@@ -101,8 +101,8 @@ class s3Client():
                 If yes, prefix ( ie all folders, subfolders and files) will be deleted. 
         """
         try: 
-            folder_exists = self._prefix_exist_and_not_empty(s3_prefix)
-            if folder_exists:
+            data_exists, subdir_exists = self._prefix_exist_and_not_empty(s3_prefix)
+            if data_exists or subdir_exists:
                 self._delete_prefix(s3_prefix)
                 logging.warning(f'Found and deleted prefix {s3_prefix}.')
             else:
