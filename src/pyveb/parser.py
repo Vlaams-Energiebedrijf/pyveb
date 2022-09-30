@@ -14,6 +14,7 @@ spark_meta_cols = {
 spark_to_rs_meta_cols = [',\n"META_loading_date_utc" TIMESTAMP default sysdate']
 
 mapping_sqlserver_redshift = {
+    'smallint': 'BIGINT',
     'bigint': 'BIGINT',
     'bigint IDENTITY':'BIGINT',
     'bit':'BOOLEAN',
@@ -52,6 +53,7 @@ mapping_pandas_pyspark = {
 }
 
 mapping_sqlserver_pyspark = {
+    'smallint': IntegerType(),
     'bigint': IntegerType(),
     'bigint IDENTITY': IntegerType(),
     'int': IntegerType(),
