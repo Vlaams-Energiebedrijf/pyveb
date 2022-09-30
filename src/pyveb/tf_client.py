@@ -66,7 +66,7 @@ class tfClient():
     def pandas_write_to_parquet(self, file, df: pd.DataFrame) -> None:
         file_name = file.split('/')[-1]
         parquet_buffer = BytesIO()
-        df.to_parquet(parquet_buffer, index=False, allow_truncated_timestamps=True)
+        df.to_parquet(parquet_buffer, index=False, allow_truncated_timestamps=True, coerce_timestamps='us')
         s3 = boto3.resource('s3')
         # we keep raw file name but overwrite extension if not parquet already
         if '.csv' in file_name:
