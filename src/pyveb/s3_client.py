@@ -152,7 +152,7 @@ class s3Client():
         """
         timestamp = round(time.time(), 4)
         parquet_buffer = BytesIO()
-        df.to_parquet(parquet_buffer, index=False, allow_truncated_timestamps=True, coerce_timestamps='us')
+        df.to_parquet(parquet_buffer, index=False, allow_truncated_timestamps=True)
         s3_key = f'{s3_prefix}{timestamp}_{s3_file_name}.parquet'
         parquet_buffer.seek(0)
         self.bucket.upload_fileobj(parquet_buffer, s3_key)
