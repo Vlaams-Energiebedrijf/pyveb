@@ -8,7 +8,7 @@ from pyspark.sql import DataFrame as SparkDataFrame
 import pyspark.sql.functions as F
 import datetime
 from functools import reduce
-from pyspark.sql.functions import UserDefinedFunction
+from pyspark.sql.functions import udf
 from typing import List, Dict
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, BooleanType, TimestampType, DoubleType, DecimalType, ArrayType, BinaryType, LongType
 
@@ -45,8 +45,8 @@ class sparkClient():
     def _get_nbr_cores(self) -> int:
        return psutil.cpu_count(logical = False)
 
-
     def read_single_parquet_file(self, file: str, schema: Dict[str, StructField] = None) -> SparkDataFrame:
+        file = file.replace('s3://', 's3a://')
         try: 
             df = self.spark.read.format("parquet").load(file)
             logging.info(f"Read {self.s3_prefix} in spark DF")
@@ -92,12 +92,11 @@ class sparkClient():
     def _unite_dfs(self, df1: SparkDataFrame, df2: SparkDataFrame) -> SparkDataFrame:
         return df1.unionByName(df2)
 
-
     def add_metadata(self, df:SparkDataFrame) -> SparkDataFrame:
         try: 
             df = df.withColumn('META_file_name', F.input_file_name()) \
-                    .withColumn('META_partition_date', F.lit(datetime.strptime(self.partition_date, "%Y-%m-%d"))) \
-                    .withColumn('META_processing_date_utc', F.lit(datetime.utcnow()))
+                    .withColumn('META_partition_date', F.lit(datetime.datetime.strptime(self.partition_date, "%Y-%m-%d"))) \
+                    .withColumn('META_processing_date_utc', F.lit(datetime.datetime.utcnow()))
             logging.info(f"Succesfully added metadata")
         except Exception as e:
             logging.error("Issue adding metadata. Exiting...")
@@ -105,17 +104,17 @@ class sparkClient():
             sys.exit(1)
         return df
 
-
-    def _try_convert(self, x):
+    @staticmethod
+    @udf
+    def udf_unicode(x):
         try:
             return x.encode("ascii","ignore")
         except:
-            return x
-    
-    def convert_version(self, df: SparkDataFrame) -> SparkDataFrame:
-        udf_unicode = UserDefinedFunction(lambda x: self._try_convert(x))
+            return x  
+
+    def convert_version(self, df: SparkDataFrame) -> SparkDataFrame: 
         try: 
-            new_df = df.select(*[udf_unicode(column).alias('version') if column == 'version' else column for column in df.columns])
+            new_df = df.select(*[self.udf_unicode(column).alias('version') if column == 'version' else column for column in df.columns])
             logging.info(f"Succesfully converted lynx version column to ascii.")
         except Exception as e:
             logging.error("Issue converting lynx version column.Exiting...")
@@ -133,6 +132,38 @@ class sparkClient():
             sys.exit(1)
         return new_df
 
+    def apply_schema(self, df:SparkDataFrame , schema) -> SparkDataFrame:
+        spark_df = self.spark.createDataFrame(df.collect(), schema = schema)
+        return spark_df
+
+    @staticmethod
+    @udf
+    def udf_float_to_int(x):
+        
+        if x is None:
+            res = None
+        else:
+            res = int(x)
+        return res
+
+    def convert_float_to_int_int(self, df: SparkDataFrame, cols: list) -> SparkDataFrame:
+        """
+            When reading from SQL, columns which are INT but contain only NULLS get converted to parquet float columns.
+            We create a pyspark schema based on the original SQL schema, hence INT column gets translated into StructField('col', IntegerType(), True).
+            In order to apply this pyspark schema, we need to convert the relevant int columns back to int.
+        """
+        try: 
+            new_df = df.select(*[self.udf_float_to_int(column).alias(column).cast('integer') if column in cols else column for column in df.columns])
+            logging.info(f"Succesfully converted float columns back to int")
+        except Exception as e:
+            logging.error("Issue converting float columns to int. Exiting...")
+            logging.error(e)
+            sys.exit(1)
+        return new_df
+        # for col in cols:
+        #     df = df.withColumn(col, (map_to_int(df[col])).cast("string"))
+        # return df
+
     def write_to_parquet(self, df: SparkDataFrame, target_dir: str, max_records: int = 500000 ):
         try:
             df.write.option("maxRecordsPerFile", max_records).parquet(target_dir)
@@ -141,36 +172,3 @@ class sparkClient():
             logging.error("Issue writing parquet files. Exiting...")
             logging.error(e)
             sys.exit(1)
-
-
-
-
-
-
-    # def add_metadata(self, df:SparkDataFrame, file_name: str, partition_date:str) -> SparkDataFrame:
-    #     df = df.withColumn('META_file_name', F.lit(str(file_name))) \
-    #             .withColumn('META_partition_date', F.lit(datetime.strptime(partition_date, "%Y-%m-%d"))) \
-    #             .withColumn('META_processing_date_utc', F.lit(datetime.datetime.utcnow()))
-    #     return df
-
-    # def convert_int_with_null_back_to_int(self, df: SparkDataFrame, cols: list) -> SparkDataFrame:
-    #     """
-    #         When reading from SQL, columns which are INT but contain NULLS get converted to parquet float columns.
-    #         We create a pyspark schema based on the original SQL schema, hence INT column gets translated into StructField('col', IntegerType(), True).
-    #         In order to apply this pyspark schema, we need to convert the relevant int columns back to int.
-    #     """
-    #     map_to_int = F.udf(lambda x: self._map_float_to_int(x))
-    #     for col in cols:
-    #         df = df.withColumn(col, (map_to_int(df[col])).cast("string"))
-    #     return df
-
-
-    # def _map_float_to_int(self, num):
-    #     if num is None:
-    #         return None
-    #     return str(int(num))
-
-
-    # def spark_apply_schema(self, df:SparkDataFrame , schema) -> SparkDataFrame:
-    #     spark_df = self.spark.createDataFrame(df.collect(), schema = schema)
-    #     return spark_df
