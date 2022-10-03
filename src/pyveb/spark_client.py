@@ -1,4 +1,5 @@
 import pandas as pd
+import shutil, os
 import logging
 from time import time
 import psutil
@@ -172,3 +173,34 @@ class sparkClient():
             logging.error("Issue writing parquet files. Exiting...")
             logging.error(e)
             sys.exit(1)
+
+
+    def write_to_parquet(self, spark_df: SparkDataFrame, max_records_per_file = 10000):
+        local_path = './data'
+        try:
+            shutil.rmtree(local_path)
+        except:
+            None
+        try:
+            spark_df.write.option('maxRecordsPerFile', max_records_per_file).mode('overwrite').parquet(local_path)
+            for file in os.listdir(local_path):
+                local_file = f'{local_path}/{file}'
+                if '.crc' in file:
+                    os.remove(local_file)
+                    continue
+                elif 'SUCCESS' in file:
+                    os.remove(local_file)
+                    continue
+                else:
+                    self.s3_client.upload_local_file(local_file, self.s3_prefix)
+                    os.remove(local_file)
+            try:
+                os.rmdir(local_path)
+            except:
+                None
+            logging.info(f'Succesfully wrote {self.s3_prefix}')
+        except Exception as e:
+            logging.error(f'Issue creating parquet file: {self.s3_prefix}. Exiting...')
+            logging.error(e)
+            sys.exit(1)
+        return 
