@@ -35,7 +35,7 @@ class sparkClient():
                         .config('spark.jars.packages', 'org.apache.hadoop:hadoop-aws:3.2.0')\
                         .getOrCreate()
             # .config('spark.sql.parquet.filterPushdown', 'false') \
-            spark.sparkContext.setLogLevel(loglevel)
+            spark.sparkContext.setLogLevel("OFF")
             logging.info(f"Spark Session Spark_{self.s3_prefix} created")
         except Exception as e:
             logging.error("Issue creating Spark Session. Exiting...")
@@ -108,19 +108,25 @@ class sparkClient():
     @staticmethod
     @udf
     def udf_unicode(x):
-        try:
-            return x.encode("ascii","ignore")
-        except:
-            return x  
+        if x is None: 
+            res = None
+        else:
+            try:
+                res = x.encode("ascii","ignore")
+            except AttributeError:
+                res = x
+        return res
 
     def convert_version(self, df: SparkDataFrame) -> SparkDataFrame: 
-        try: 
-            new_df = df.select(*[self.udf_unicode(column).alias('version') if column == 'version' else column for column in df.columns])
-            logging.info(f"Succesfully converted lynx version column to ascii.")
-        except Exception as e:
-            logging.error("Issue converting lynx version column.Exiting...")
-            logging.error(e)
-            sys.exit(1)
+        if 'version' in df.columns:
+            try: 
+                new_df = df.select(*[self.udf_unicode(column).alias('version') if column == 'version' else column for column in df.columns])
+                logging.info(f"Succesfully converted lynx version column to ascii.")
+            except Exception as e:
+                logging.error("Issue converting lynx version column.Exiting...")
+                logging.error(e)
+                sys.exit(1)
+        else: new_df = df
         return new_df
 
     def reindex_cols(self, df: SparkDataFrame, columns_order: List[str]) -> SparkDataFrame:
@@ -140,11 +146,13 @@ class sparkClient():
     @staticmethod
     @udf
     def udf_float_to_int(x):
-        
         if x is None:
             res = None
         else:
-            res = int(x)
+            try:
+                res = int(x)
+            except AttributeError:
+                res = x
         return res
 
     def convert_float_to_int_int(self, df: SparkDataFrame, cols: list) -> SparkDataFrame:
@@ -154,33 +162,20 @@ class sparkClient():
             In order to apply this pyspark schema, we need to convert the relevant int columns back to int.
         """
         try: 
-            new_df = df.select(*[self.udf_float_to_int(column).alias(column).cast('integer') if column in cols else column for column in df.columns])
+            new_df = df.select(*[self.udf_float_to_int(column).cast(IntegerType()).alias(column) if column in cols else column for column in df.columns])
             logging.info(f"Succesfully converted float columns back to int")
         except Exception as e:
             logging.error("Issue converting float columns to int. Exiting...")
             logging.error(e)
             sys.exit(1)
         return new_df
-        # for col in cols:
-        #     df = df.withColumn(col, (map_to_int(df[col])).cast("string"))
-        # return df
 
-    def write_to_parquet(self, df: SparkDataFrame, target_dir: str, max_records: int = 500000 ):
-        try:
-            df.write.option("maxRecordsPerFile", max_records).parquet(target_dir)
-            logging.info(f"Succesfully wrote spark DF to parquet at s3 location: {target_dir}")
-        except Exception as e:
-            logging.error("Issue writing parquet files. Exiting...")
-            logging.error(e)
-            sys.exit(1)
-
-
-    def write_to_parquet(self, spark_df: SparkDataFrame, max_records_per_file = 10000):
+    def write_to_parquet(self, spark_df: SparkDataFrame, max_records_per_file = 100000):
         local_path = './data'
         try:
             shutil.rmtree(local_path)
         except:
-            None
+            pass
         try:
             spark_df.write.option('maxRecordsPerFile', max_records_per_file).mode('overwrite').parquet(local_path)
             for file in os.listdir(local_path):
@@ -204,3 +199,4 @@ class sparkClient():
             logging.error(e)
             sys.exit(1)
         return 
+
