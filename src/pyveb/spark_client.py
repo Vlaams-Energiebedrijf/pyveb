@@ -20,20 +20,29 @@ class sparkClient():
         self.s3_prefix = s3_target_prefix
         self.partition_date = partition_start
         self.s3_client = s3_client
+        self.env = kwargs['env']
         self.spark = self._create_spark_session()
         return None
 
-    def _create_spark_session(self, loglevel: str = "ERROR"):
+    def _create_spark_session(self,):
          # https://stackoverflow.com/questions/50891509/apache-spark-codegen-stage-grows-beyond-64-kb 
         nbr_cores = self._get_nbr_cores()
-        try: 
-            spark = SparkSession.builder.master(f"local[{nbr_cores}]") \
-                        .appName(f'Spark_{self.s3_prefix}') \
-                        .config('spark.sql.codegen.wholeStage', 'false') \
-                        .config("spark.sql.session.timeZone", "UTC") \
-                        .config("fs.s3a.aws.credentials.provider","com.amazonaws.auth.profile.ProfileCredentialsProvider")\
-                        .config('spark.jars.packages', 'org.apache.hadoop:hadoop-aws:3.2.0')\
-                        .getOrCreate()
+        try:
+            if self.env == 'local':
+                spark = SparkSession.builder.master(f"local[{nbr_cores}]") \
+                            .appName(f'Spark_{self.s3_prefix}') \
+                            .config('spark.sql.codegen.wholeStage', 'false') \
+                            .config("spark.sql.session.timeZone", "UTC") \
+                            .config("fs.s3a.aws.credentials.provider","com.amazonaws.auth.profile.ProfileCredentialsProvider")\
+                            .config('spark.jars.packages', 'org.apache.hadoop:hadoop-aws:3.2.0')\
+                            .getOrCreate()
+            else:
+                spark = SparkSession.builder.master(f"local[{nbr_cores}]") \
+                            .appName(f'Spark_{self.s3_prefix}') \
+                            .config('spark.sql.codegen.wholeStage', 'false') \
+                            .config("spark.sql.session.timeZone", "UTC") \
+                            .config('spark.jars.packages', 'org.apache.hadoop:hadoop-aws:3.2.0')\
+                            .getOrCreate()
             # .config('spark.sql.parquet.filterPushdown', 'false') \
             spark.sparkContext.setLogLevel("OFF")
             logging.info(f"Spark Session Spark_{self.s3_prefix} created")
