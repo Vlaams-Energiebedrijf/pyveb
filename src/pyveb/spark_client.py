@@ -38,11 +38,13 @@ class sparkClient():
                             .config('spark.jars.packages', 'org.apache.hadoop:hadoop-aws:3.2.0')\
                             .getOrCreate()
             else:
+                # https://stackoverflow.com/questions/54223242/aws-access-s3-from-spark-using-iam-role?noredirect=1&lq=1
                 logging.info('Building cloud spark session')
                 spark = SparkSession.builder.master(f"local[{nbr_cores}]") \
                             .appName(f'Spark_{self.s3_prefix}') \
                             .config('spark.sql.codegen.wholeStage', 'false') \
                             .config("spark.sql.session.timeZone", "UTC") \
+                            .config("fs.s3a.aws.credentials.provider","com.amazonaws.auth.InstanceProfileCredentialsProvider")\
                             .config('spark.jars.packages', 'org.apache.hadoop:hadoop-aws:3.2.0')\
                             .getOrCreate()
             # .config('spark.sql.parquet.filterPushdown', 'false') \
