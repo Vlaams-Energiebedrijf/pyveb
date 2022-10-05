@@ -28,19 +28,21 @@ class sparkClient():
         return None
 
     def _get_temp_batch_credentials(self ):
+        # https://stackoverflow.com/questions/44171849/aws-boto3-assumerole-example-which-includes-role-usage
         # create an STS client object that represents a live connection to the 
         # STS service
         sts_client = boto3.client('sts')
-        # Call the assume_role method of the STSConnection object and pass the role
-        # ARN and a role session name.
-        assumed_role_object=sts_client.assume_role(
-            RoleArn=self.assumed_role,
-            RoleSessionName="AssumeRoleSession1"
-        )
-        # From the response that contains the assumed role, get the temporary 
-        # credentials that can be used to make subsequent API calls
-        credentials=assumed_role_object['Credentials']
-        logging.warning(credentials)
+        # # Call the assume_role method of the STSConnection object and pass the role
+        # # ARN and a role session name.
+        # assumed_role_object=sts_client.assume_role(
+        #     RoleArn=self.assumed_role,
+        #     RoleSessionName="AssumeRoleSession1"
+        # )
+        # # From the response that contains the assumed role, get the temporary 
+        # # credentials that can be used to make subsequent API calls
+        # credentials=assumed_role_object['Credentials']
+        # logging.warning(credentials)
+        credentials = sts_client.get_session_token()['Credentials']
         return credentials
 
 
