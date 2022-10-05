@@ -13,6 +13,7 @@ from pyspark.sql.functions import udf
 from typing import List, Dict
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, BooleanType, TimestampType, DoubleType, DecimalType, ArrayType, BinaryType, LongType
 import boto3
+from requests import session
 
 
 class sparkClient():
@@ -28,20 +29,15 @@ class sparkClient():
         return None
 
     def _get_temp_batch_credentials(self ):
-        # create an STS client object that represents a live connection to the 
-        # STS service
-        sts_client = boto3.client('sts')
-        # Call the assume_role method of the STSConnection object and pass the role
-        # ARN and a role session name.
-        assumed_role_object=sts_client.assume_role(
-            RoleArn=self.assumed_role,
-            RoleSessionName="AssumeRoleSession1"
-        )
-        # From the response that contains the assumed role, get the temporary 
-        # credentials that can be used to make subsequent API calls
-        credentials=assumed_role_object['Credentials']
-        logging.warning(credentials)
-        return credentials
+        # we cannot fetch sts temp credentials via an assumed role, hence, we get the current credentials of the assumed role
+        # https://stackoverflow.com/questions/36287720/boto3-get-credentials-dynamically
+        session = boto3.Session()
+        credentials = session.get_credentials()
+        credentials = credentials.get_frozen_credentials()
+        access_key = credentials[0]
+        secret_key = credentials[1]
+        session_token = credentials[2]
+        return access_key, secret_key, session_token
 
 
     def _create_spark_session(self):
@@ -58,7 +54,7 @@ class sparkClient():
                             .config('spark.jars.packages', 'org.apache.hadoop:hadoop-aws:3.2.0')\
                             .getOrCreate()
             else:
-                temp_credentials = self._get_temp_batch_credentials()
+                access_key, secret_key, session_token = self._get_temp_batch_credentials()
                 # https://stackoverflow.com/questions/54223242/aws-access-s3-from-spark-using-iam-role?noredirect=1&lq=1
                 logging.info('Building cloud spark session')
                 spark = SparkSession.builder.master(f"local[{nbr_cores}]") \
@@ -67,9 +63,9 @@ class sparkClient():
                             .config("spark.sql.session.timeZone", "UTC") \
                             .config('spark.jars.packages', 'org.apache.hadoop:hadoop-aws:3.2.0')\
                             .config('fs.s3a.aws.credentials.provider', 'org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider')\
-                            .config('fs.s3a.access.key', temp_credentials['AccessKeyId'])\
-                            .config('fs.s3a.secret.key', temp_credentials['SecretAccessKey'])\
-                            .config('fs.s3a.session.token', temp_credentials['SessionToken'])\
+                            .config('fs.s3a.access.key', access_key)\
+                            .config('fs.s3a.secret.key', secret_key)\
+                            .config('fs.s3a.session.token', session_token)\
                             .getOrCreate()  
             #  config('spark.hadoop.fs.s3a.aws.credentials.provider', 'org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider')\
             # .config("fs.s3a.aws.credentials.provider","com.amazonaws.auth.InstanceProfileCredentialsProvider")\
