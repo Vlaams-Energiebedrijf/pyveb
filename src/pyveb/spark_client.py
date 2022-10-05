@@ -23,11 +23,11 @@ class sparkClient():
         self.partition_date = partition_start
         self.s3_client = s3_client
         self.env = kwargs['env']
-        self.spark = self._create_spark_session()
         self.assumed_role = kwargs['assumed_role']
+        self.spark = self._create_spark_session()
         return None
 
-    def _get_temp_batch_credentials(self, ):
+    def _get_temp_batch_credentials(self ):
         # create an STS client object that represents a live connection to the 
         # STS service
         sts_client = boto3.client('sts')
@@ -44,9 +44,8 @@ class sparkClient():
         return credentials
 
 
-    def _create_spark_session(self,):
+    def _create_spark_session(self):
          # https://stackoverflow.com/questions/50891509/apache-spark-codegen-stage-grows-beyond-64-kb 
-        
         nbr_cores = self._get_nbr_cores()
         try:
             logging.info('Building local spark session')
