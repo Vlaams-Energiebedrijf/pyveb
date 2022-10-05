@@ -12,6 +12,8 @@ from functools import reduce
 from pyspark.sql.functions import udf
 from typing import List, Dict
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, BooleanType, TimestampType, DoubleType, DecimalType, ArrayType, BinaryType, LongType
+import boto3
+
 
 class sparkClient():
 
@@ -22,10 +24,29 @@ class sparkClient():
         self.s3_client = s3_client
         self.env = kwargs['env']
         self.spark = self._create_spark_session()
+        self.assumed_role = kwargs['assumed_role']
         return None
+
+    def _get_temp_batch_credentials(self, ):
+        # create an STS client object that represents a live connection to the 
+        # STS service
+        sts_client = boto3.client('sts')
+        # Call the assume_role method of the STSConnection object and pass the role
+        # ARN and a role session name.
+        assumed_role_object=sts_client.assume_role(
+            RoleArn=self.assumed_role,
+            RoleSessionName="AssumeRoleSession1"
+        )
+        # From the response that contains the assumed role, get the temporary 
+        # credentials that can be used to make subsequent API calls
+        credentials=assumed_role_object['Credentials']
+        logging.warning(credentials)
+        return credentials
+
 
     def _create_spark_session(self,):
          # https://stackoverflow.com/questions/50891509/apache-spark-codegen-stage-grows-beyond-64-kb 
+        
         nbr_cores = self._get_nbr_cores()
         try:
             logging.info('Building local spark session')
@@ -38,15 +59,22 @@ class sparkClient():
                             .config('spark.jars.packages', 'org.apache.hadoop:hadoop-aws:3.2.0')\
                             .getOrCreate()
             else:
+                temp_credentials = self._get_temp_batch_credentials()
                 # https://stackoverflow.com/questions/54223242/aws-access-s3-from-spark-using-iam-role?noredirect=1&lq=1
                 logging.info('Building cloud spark session')
                 spark = SparkSession.builder.master(f"local[{nbr_cores}]") \
                             .appName(f'Spark_{self.s3_prefix}') \
                             .config('spark.sql.codegen.wholeStage', 'false') \
                             .config("spark.sql.session.timeZone", "UTC") \
-                            .config("fs.s3a.aws.credentials.provider","com.amazonaws.auth.InstanceProfileCredentialsProvider")\
                             .config('spark.jars.packages', 'org.apache.hadoop:hadoop-aws:3.2.0')\
-                            .getOrCreate()
+                            .config('fs.s3a.aws.credentials.provider', 'org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider')\
+                            .config('fs.s3a.access.key', temp_credentials['AccessKeyId'])\
+                            .config('fs.s3a.secret.key', temp_credentials['SecretAccessKey'])\
+                            .config('fs.s3a.session.token', temp_credentials['SessionToken'])\
+                            .getOrCreate()  
+            #  config('spark.hadoop.fs.s3a.aws.credentials.provider', 'org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider')\
+            # .config("fs.s3a.aws.credentials.provider","com.amazonaws.auth.InstanceProfileCredentialsProvider")\
+            # "fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem"
             # .config('spark.sql.parquet.filterPushdown', 'false') \
             spark.sparkContext.setLogLevel("OFF")
             logging.info(f"Spark Session Spark_{self.s3_prefix} created")
