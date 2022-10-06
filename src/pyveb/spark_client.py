@@ -44,8 +44,8 @@ class sparkClient():
          # https://stackoverflow.com/questions/50891509/apache-spark-codegen-stage-grows-beyond-64-kb 
         nbr_cores = self._get_nbr_cores()
         try:
-            logging.info('Building local spark session')
             if self.env == 'local':
+                logging.info('Building local spark session')
                 spark = SparkSession.builder.master(f"local[{nbr_cores}]") \
                             .appName(f'Spark_{self.s3_prefix}') \
                             .config('spark.sql.codegen.wholeStage', 'false') \

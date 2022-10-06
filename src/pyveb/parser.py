@@ -89,20 +89,30 @@ def sql_ddl_to_pyspark(sql_ddl):
     from simple_ddl_parser import DDLParser
     result = DDLParser(sql_ddl).run(output_mode='mssql')
     columns = result[0]['columns']
+    # print(columns)
     cols = []
     dtypes = []
+    sizes = []
     target_cols = []
     for col in columns:
         cols.append(col['name'])
         dtypes.append(col['type'])
-    d = dict(zip(cols, dtypes))
-    for key, val in d.items():
-        key = key.strip().replace(' ', '_').replace('(','').replace(')','').replace(',','').replace(';','').replace('{','').replace('}','').replace('\n','').replace('\t','').replace('=','')
-        target_type = mapping_sqlserver_pyspark[val]
-        line = StructField(key, target_type, True)
-        target_cols.append(line)
+        sizes.append(col['size'])
+    zipped = zip(cols, dtypes, sizes)
+    for item in zipped:
+        key = item[0].strip().replace(' ', '_').replace('(','').replace(')','').replace(',','').replace(';','').replace('{','').replace('}','').replace('\n','').replace('\t','').replace('=','')
+        target_type = mapping_sqlserver_pyspark[item[1]]
+        if target_type == DecimalType():
+            line = StructField(key, DecimalType(item[2][0], item[2][1]), True)
+            print(line)
+            target_cols.append(line)
+        else:
+            line = StructField(key, target_type, True)
+            print(line)
+            target_cols.append(line)
     for key, val in spark_meta_cols.items():
         line = StructField(key, val, True)
+        print(line)
         target_cols.append(line)
     pyspark_schema = StructType(target_cols)
     return pyspark_schema
@@ -216,3 +226,5 @@ def write_flyway_ddl_to_file(flyway_ddl, target_table, flyway_schema='ingest'):
     with open(f'{flyway_dir}/{new_name}', 'w') as file:
         file.write(flyway_ddl)
     file.close()
+
+
