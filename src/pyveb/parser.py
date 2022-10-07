@@ -212,11 +212,11 @@ def sqlserver_to_flyway_ddl(sql_ddl:str, target_table:str, flyway_schema='ingest
     """
     return new_ddl
 
-def write_flyway_ddl_to_file(flyway_ddl, target_table, flyway_schema='ingest'):
+def write_flyway_ddl_to_file(flyway_ddl, target_table,local_path, flyway_schema='ingest'):
     from os import listdir
     from os.path import isfile, join
 
-    flyway_dir = (f'/Users/pieterdepetter/GitHub-VEB/terra-etl/flyway/modules/redshift/{flyway_schema}')
+    flyway_dir = (f'{local_path}{flyway_schema}')
     files = [f for f in listdir(flyway_dir) if isfile(join(flyway_dir, f))]
     files.sort()
     version, seq = files[-1].split('__')[0].split('_')
@@ -226,5 +226,7 @@ def write_flyway_ddl_to_file(flyway_ddl, target_table, flyway_schema='ingest'):
     with open(f'{flyway_dir}/{new_name}', 'w') as file:
         file.write(flyway_ddl)
     file.close()
+
+    ## /Users/pieterdepetter/GitHub-VEB/terra-etl/flyway/modules/redshift/
 
 
