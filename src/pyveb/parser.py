@@ -215,7 +215,6 @@ def sqlserver_to_flyway_ddl(sql_ddl:str, target_table:str, flyway_schema='ingest
 def write_flyway_ddl_to_file(flyway_ddl, target_table,local_path, flyway_schema='ingest'):
     from os import listdir
     from os.path import isfile, join
-
     flyway_dir = (f'{local_path}{flyway_schema}')
     files = [f for f in listdir(flyway_dir) if isfile(join(flyway_dir, f))]
     files.sort()
