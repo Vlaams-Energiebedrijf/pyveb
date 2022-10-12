@@ -1,3 +1,4 @@
+import contextlib
 import pandas as pd
 import shutil, os
 import logging
@@ -24,7 +25,7 @@ class sparkClient():
         self.partition_date = partition_start
         self.s3_client = s3_client
         self.env = kwargs['env']
-        self.assumed_role = kwargs['assumed_role']
+        # self.assumed_role = kwargs['assumed_role']
         self.spark = self._create_spark_session()
         return None
 
@@ -82,14 +83,14 @@ class sparkClient():
     def _get_nbr_cores(self) -> int:
        return psutil.cpu_count(logical = False)
 
-    def read_single_parquet_file(self, file: str, schema: Dict[str, StructField] = None) -> SparkDataFrame:
+    def read_single_csv_file(self, file:str, schema: Dict[str, StructField] = None) -> SparkDataFrame:
         file = file.replace('s3://', 's3a://')
         try: 
-            df = self.spark.read.format("parquet").load(file)
+            df = self.spark.read.format("csv").option("header","true").load(file)
             logging.info(f"Read {self.s3_prefix} in spark DF")
             if schema:
                 new_df = self.enforce_schema(df, schema)
-                logging.info(f"Enforced schema")
+                logging.info("Enforced schema")
             else:
                 new_df = df
         except Exception as e:
@@ -98,6 +99,40 @@ class sparkClient():
             sys.exit(1)
         return new_df
 
+    def read_single_parquet_file(self, file: str, schema: Dict[str, StructField] = None) -> SparkDataFrame:
+        file = file.replace('s3://', 's3a://')
+        try: 
+            df = self.spark.read.format("parquet").load(file)
+            logging.info(f"Read {self.s3_prefix} in spark DF")
+            if schema:
+                new_df = self.enforce_schema(df, schema)
+                logging.info("Enforced schema")
+            else:
+                new_df = df
+        except Exception as e:
+            logging.error("Issue reading parquet Exiting...")
+            logging.error(e)
+            sys.exit(1)
+        return new_df
+
+    def read_multiple_csv_files(self, files: List[str], schema: Dict[str, StructField]) -> SparkDataFrame:
+        try:
+            list_of_dfs = []
+            for file in files:
+                df = self.spark.read.format("csv").option("header","true").load(file)
+                if schema:
+                    new_df = self.enforce_schema(df, schema)
+                    list_of_dfs.append(new_df)
+                else:
+                    list_of_dfs.append(df)
+            united_df = reduce(self.unite_dfs, list_of_dfs)
+            logging.info("Succesfully read all files in a spark DF")
+        except Exception as e:
+            logging.error("Issue reading parquet files and unioning them in spark DF Exiting...")
+            logging.error(e)
+            sys.exit(1)
+        return united_df
+    
     def read_multiple_parquet_files(self, files: List[str], schema: Dict[str, StructField]) -> SparkDataFrame:
         try:
             list_of_dfs = []
@@ -109,7 +144,7 @@ class sparkClient():
                 else:
                     list_of_dfs.append(df)
             united_df = reduce(self.unite_dfs, list_of_dfs)
-            logging.info(f"Succesfully read all files in a spark DF")
+            logging.info("Succesfully read all files in a spark DF")
         except Exception as e:
             logging.error("Issue reading parquet files and unioning them in spark DF Exiting...")
             logging.error(e)
@@ -119,7 +154,7 @@ class sparkClient():
     def enforce_schema(self, df: SparkDataFrame, schema: Dict[str, StructField]) -> SparkDataFrame:    
         try:
             new_df = df.select([F.col(c).cast(schema[c]).alias(c) for c in df.columns])
-            logging.info(f"Succesfully applied schema")
+            logging.info("Succesfully applied schema")
         except Exception as e:
             logging.error("Issue applying schema. Exiting...")
             logging.error(e)
@@ -132,9 +167,9 @@ class sparkClient():
     def add_metadata(self, df:SparkDataFrame) -> SparkDataFrame:
         try: 
             df = df.withColumn('META_file_name', F.input_file_name()) \
-                    .withColumn('META_partition_date', F.lit(datetime.datetime.strptime(self.partition_date, "%Y-%m-%d"))) \
-                    .withColumn('META_processing_date_utc', F.lit(datetime.datetime.utcnow()))
-            logging.info(f"Succesfully added metadata")
+                        .withColumn('META_partition_date', F.lit(datetime.datetime.strptime(self.partition_date, "%Y-%m-%d"))) \
+                        .withColumn('META_processing_date_utc', F.lit(datetime.datetime.now(datetime.timezone.utc)))
+            logging.info("Succesfully added metadata")
         except Exception as e:
             logging.error("Issue adding metadata. Exiting...")
             logging.error(e)
@@ -157,7 +192,7 @@ class sparkClient():
         if 'version' in df.columns:
             try: 
                 new_df = df.select(*[self.udf_unicode(column).alias('version') if column == 'version' else column for column in df.columns])
-                logging.info(f"Succesfully converted lynx version column to ascii.")
+                logging.info("Succesfully converted lynx version column to ascii.")
             except Exception as e:
                 logging.error("Issue converting lynx version column.Exiting...")
                 logging.error(e)
@@ -168,7 +203,7 @@ class sparkClient():
     def reindex_cols(self, df: SparkDataFrame, columns_order: List[str]) -> SparkDataFrame:
         try:
             new_df = df.select(*columns_order)
-            logging.info(f"Succesfully reindexed columns")
+            logging.info("Succesfully reindexed columns")
         except Exception as e:
             logging.error("Issue reindexing columns. Exiting...")
             logging.error(e)
@@ -176,8 +211,7 @@ class sparkClient():
         return new_df
 
     def apply_schema(self, df:SparkDataFrame , schema) -> SparkDataFrame:
-        spark_df = self.spark.createDataFrame(df.collect(), schema = schema)
-        return spark_df
+        return self.spark.createDataFrame(df.collect(), schema = schema)
 
     @staticmethod
     @udf
@@ -199,7 +233,7 @@ class sparkClient():
         """
         try: 
             new_df = df.select(*[self.udf_float_to_int(column).cast(IntegerType()).alias(column) if column in cols else column for column in df.columns])
-            logging.info(f"Succesfully converted float columns back to int")
+            logging.info("Succesfully converted float columns back to int")
         except Exception as e:
             logging.error("Issue converting float columns to int. Exiting...")
             logging.error(e)
@@ -208,26 +242,18 @@ class sparkClient():
 
     def write_to_parquet(self, spark_df: SparkDataFrame, max_records_per_file = 100000):
         local_path = './data'
-        try:
+        with contextlib.suppress(Exception):
             shutil.rmtree(local_path)
-        except:
-            pass
         try:
             spark_df.write.option('maxRecordsPerFile', max_records_per_file).mode('overwrite').parquet(local_path)
             for file in os.listdir(local_path):
                 local_file = f'{local_path}/{file}'
-                if '.crc' in file:
-                    os.remove(local_file)
-                    continue
-                elif 'SUCCESS' in file:
-                    os.remove(local_file)
-                    continue
-                else:
+                if '.crc' not in file and 'SUCCESS' not in file:
                     self.s3_client.upload_local_file(local_file, self.s3_prefix)
-                    os.remove(local_file)
+                os.remove(local_file)
             try:
                 os.rmdir(local_path)
-            except:
+            except Exception:
                 None
             logging.info(f'Succesfully wrote {self.s3_prefix}')
         except Exception as e:
