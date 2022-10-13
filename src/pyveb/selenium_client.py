@@ -31,7 +31,10 @@ class seleniumClient():
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_prefs = {}
+        chrome_prefs = {
+            'download.default_directory' :
+            './temp_data/'
+        }
         chrome_options.experimental_options["prefs"] = chrome_prefs
         chrome_prefs["profile.default_content_settings"] = {"images": 2}
         return chrome_options
@@ -43,11 +46,9 @@ class seleniumClient():
             # chrome iterates very quickly, hence chrome and chromedriver diverge. Hence, when running local, we can ensure match between both with below code
                 from webdriver_manager.chrome import ChromeDriverManager
                 driver = webdriver.Chrome(ChromeDriverManager().install(), options=self._set_chrome_options())
-                logging.info("Chromedriver created succesfully")
             else:
                 # driver and chrome are installed in docker image so we can use standard way of creating webdriver
                 driver = webdriver.Chrome(options=self._set_chrome_options())
-                logging.info("Chromedriver created succesfully")
         except Exception as error: 
             logging.error('Issue creating chrome driver. Exiting with status 1')
             logging.error(error)
@@ -64,11 +65,10 @@ class seleniumClient():
         logging.info("Creating local directory to temporarily store downloaded files")
         timestamp = round(time.time(), 4)
         file = f'{timestamp}_{file_name}.{file_extension}'
-        local_path = f'./temp_data/'
+        local_path = './temp_data/'
         if not os.path.exists(local_path):
-                os.mkdir(local_path)         
-        local_file = f'{local_path}{file}'
-        return local_file
+                os.mkdir(local_path)
+        return f'{local_path}{file}'
 
     def get_file(self, element_type:str, element_name:str, file_name:str, file_extension:str):
         """
@@ -89,7 +89,7 @@ class seleniumClient():
                 provide the desired extension
 
             This function creates a local path ./temp_data/ and creates a file within local path: 165384.00_file_name.file_extension
-            Next, the driver downloads the specified file by accessing the HTML element specified by element_type and element_name. Retry pattern 
+            Next, the driver downloads the specified file via href by accessing the HTML element specified by element_type and element_name. Retry pattern 
             with exponential back of is implemented. 
 
             Function returns local_file
@@ -101,6 +101,7 @@ class seleniumClient():
                 local_file = self._create_local_dir(file_name, file_extension)
                 self.driver.get(self.url)
                 element = self.driver.find_element(getattr(By, element_type), element_name)
+                sub_element = element.find_element(getattr(By, element_type), element_name)
                 file_url = element.get_attribute('href')
                 daily_file = urllib.request.URLopener()
                 daily_file.retrieve(file_url, local_file )
@@ -110,15 +111,42 @@ class seleniumClient():
                     logging.warning(f'Issue downloading file, trying again: {e}')
                     continue
                 elif i == 2: 
-                    logging.error(f'Cannot download file. Exiting..')
+                    logging.error('Cannot download file. Exiting..')
                     sys.exit(1)
         logging.info(f'Succesfully retrieved file and stored here: {local_file}')
         return local_file
         
+    def get_file_via_form_button_xpath(self, selenium_xpath:str ):
+        """
+            xpath: //form[@id='csvdownload']/button[1]
+        """ 
+        for i in range(3):
+        # retry pattern with some back off
+            time.sleep(i*i)
+            try:
+                self.driver.get(self.url)
+                # safety wait
+                time.sleep(1)
+                button = self.driver.find_element(By.XPATH, selenium_xpath )
+                button.click()
+                # REFACTOR - we need to wait before closing the driver, otherwise we end up with an incomplete crcdownload
+                # we should check in temp_data whether the filetype is csv
+                time.sleep(10)
+                break
+            except Exception as e:
+                if i < 2:
+                    logging.warning(f'Issue downloading file, trying again: {e}')
+                    continue
+                elif i == 2: 
+                    logging.error('Cannot download file. Exiting..')
+                    sys.exit(1)
+        logging.info('Succesfully retrieved file and stored in ./temp_data/')
+        return
+      
     def quit(self):
         self.driver.quit()
     
 
     
 
-        
+  
