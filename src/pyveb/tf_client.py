@@ -47,9 +47,7 @@ class tfClient():
     ## in case we have null dates, they cannot be 9999-01-01 since this compromises our upsert operation
     def pandas_format_timestamps(self, df:pd.DataFrame) -> pd.DataFrame:
         datetime_df = df.select_dtypes(include="datetime")
-        datetime_cols = datetime_df.columns
-        # replace cogenius NULL with datetimelike string in order to convert via .dt accessor
-        if datetime_cols:
+        if datetime_cols := datetime_df.columns:
             df[datetime_cols] = df[datetime_cols].replace({None: '1111-01-01 00:00:00.000'})
             df[datetime_cols] = df[datetime_cols].apply(pd.to_datetime, format='%Y-%m-%d %H:%M:%S', errors='coerce')
         return df
@@ -59,7 +57,7 @@ class tfClient():
         df['META_file_name'] = file
         df['META_partition_date'] = self.partition_date
         df['META_partition_date'] = df['META_partition_date'].apply(pd.to_datetime, format='%Y-%m-%d', errors='coerce')
-        df['META_processing_date_utc'] = datetime.datetime.utcnow()
+        df['META_processing_date_utc'] = datetime.datetime.now(datetime.timezone.utc)
         df['META_processing_date_utc'] = df['META_processing_date_utc'].apply(pd.to_datetime, format='%Y-%m-%d %H:%M:%S', errors='coerce')
         return df
 
@@ -91,12 +89,10 @@ class tfClient():
         return df
 
     def pandas_to_spark_dataframe(self, df:pd.DataFrame, schema) -> SparkDataFrame:
-        spark_df = self.spark.createDataFrame(df, schema = schema)
-        return spark_df
+        return self.spark.createDataFrame(df, schema = schema)
 
     def spark_apply_schema(self, df:SparkDataFrame , schema) -> SparkDataFrame:
-        spark_df = self.spark.createDataFrame(df.collect(), schema = schema)
-        return spark_df
+        return self.spark.createDataFrame(df.collect(), schema = schema)
 
     def spark_empty_and_nan_to_null(self, df: SparkDataFrame) -> SparkDataFrame:
         """
@@ -119,24 +115,18 @@ class tfClient():
         local_path = './data'
         try:
             shutil.rmtree(local_path)
-        except:
+        except Exception:
             None
         try:
             spark_df.write.option('maxRecordsPerFile', max_records_per_file).mode('overwrite').parquet(local_path)
             for file in os.listdir(local_path):
                 local_file = f'{local_path}/{file}'
-                if '.crc' in file:
-                    os.remove(local_file)
-                    continue
-                elif 'SUCCESS' in file:
-                    os.remove(local_file)
-                    continue
-                else:
+                if '.crc' not in file and 'SUCCESS' not in file:
                     self.s3_client.upload_local_file(local_file, self.s3_prefix)
-                    os.remove(local_file)
+                os.remove(local_file)
             try:
                 os.rmdir(local_path)
-            except:
+            except Exception:
                 None
             logging.info(f'Succesfully wrote {self.s3_prefix}')
         except Exception as e:
