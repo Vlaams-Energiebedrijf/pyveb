@@ -83,10 +83,10 @@ class sparkClient():
     def _get_nbr_cores(self) -> int:
        return psutil.cpu_count(logical = False)
 
-    def read_single_csv_file(self, file:str, schema: Dict[str, StructField] = None) -> SparkDataFrame:
+    def read_single_csv_file(self, file:str, schema: Dict[str, StructField] = None, header: str = "true", delimiter: str = ";") -> SparkDataFrame:
         file = file.replace('s3://', 's3a://')
         try: 
-            df = self.spark.read.format("csv").option("header","true").load(file)
+            df = self.spark.read.format("csv").option("header",header).option("delimiter", delimiter).load(file)
             logging.info(f"Read {self.s3_prefix} in spark DF")
             if schema:
                 new_df = self.enforce_schema(df, schema)
@@ -115,11 +115,11 @@ class sparkClient():
             sys.exit(1)
         return new_df
 
-    def read_multiple_csv_files(self, files: List[str], schema: Dict[str, StructField]) -> SparkDataFrame:
+    def read_multiple_csv_files(self, files: List[str], schema: Dict[str, StructField], header: str = "true", delimiter: str = ";") -> SparkDataFrame:
         try:
             list_of_dfs = []
             for file in files:
-                df = self.spark.read.format("csv").option("header","true").load(file)
+                df = self.spark.read.format("csv").option("header",header).option("delimiter", delimiter).load(file)
                 if schema:
                     new_df = self.enforce_schema(df, schema)
                     list_of_dfs.append(new_df)
