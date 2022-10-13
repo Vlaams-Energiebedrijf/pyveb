@@ -118,7 +118,10 @@ class seleniumClient():
         
     def get_file_via_form_button_xpath(self, selenium_xpath:str ):
         """
-            xpath: //form[@id='csvdownload']/button[1]
+            ARGS: 
+                xpath: //form[@id='csvdownload']/button[1]
+            
+            Donwloads file to temp_data and waits 10 seconds to complete download
         """ 
         for i in range(3):
         # retry pattern with some back off
