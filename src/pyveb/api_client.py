@@ -43,7 +43,7 @@ class basicAPI():
                 if x == int(retries)-1:
                     raise RuntimeError(f'No 200 response after {retries} tries for query: {json.loads(query_params)}')
                 else:
-                    logging.warning(f'Trying again ... query: {json.loads(query_params)}')
+                    # logging.warning(f'Trying again ... query: {json.loads(query_params)}')
                     sleep_duration = (int(backoff_in_seconds) * 2 ** x + random.uniform(0, 1))
                     sleep(sleep_duration)
                     x += 1
@@ -57,7 +57,7 @@ class basicAPI():
                 if x == int(retries)-1:
                     raise RuntimeError(f'No 200 response after {retries} tries for {endpoint}/{path_params}')
                 else:
-                    logging.warning(f'Trying again ... {endpoint}/{path_params}')
+                    # logging.warning(f'Trying again ... {endpoint}/{path_params}')
                     sleep_duration = (int(backoff_in_seconds) * 2 ** x + random.uniform(0, 1))
                     sleep(sleep_duration)
                     x += 1
