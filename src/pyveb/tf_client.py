@@ -47,7 +47,9 @@ class tfClient():
     ## in case we have null dates, they cannot be 9999-01-01 since this compromises our upsert operation
     def pandas_format_timestamps(self, df:pd.DataFrame) -> pd.DataFrame:
         datetime_df = df.select_dtypes(include="datetime")
-        if datetime_cols := datetime_df.columns:
+        datetime_cols = datetime_df.columns
+        # replace cogenius NULL with datetimelike string in order to convert via .dt accessor
+        if datetime_cols:
             df[datetime_cols] = df[datetime_cols].replace({None: '1111-01-01 00:00:00.000'})
             df[datetime_cols] = df[datetime_cols].apply(pd.to_datetime, format='%Y-%m-%d %H:%M:%S', errors='coerce')
         return df
