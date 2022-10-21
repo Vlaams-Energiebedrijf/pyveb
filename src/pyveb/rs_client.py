@@ -14,12 +14,12 @@ class rsClient():
             For local development, we fetch environemnt variables from local enviroment where we have variables for dev and prd, hence the except statement.
         """
         try:
-            dbname=os.environ[f'REDSHIFT_DB']
-            user = os.environ[f'REDSHIFT_UNAME']
-            password = os.environ[f'REDSHIFT_PASSWORD']
-            host = os.environ[f'REDSHIFT_HOST']
-            port = os.environ[f'REDSHIFT_PORT']
-        except: 
+            dbname=os.environ['REDSHIFT_DB']
+            user = os.environ['REDSHIFT_UNAME']
+            password = os.environ['REDSHIFT_PASSWORD']
+            host = os.environ['REDSHIFT_HOST']
+            port = os.environ['REDSHIFT_PORT']
+        except Exception: 
             dbname=os.environ[f'REDSHIFT_DB_{env.upper()}']
             user = os.environ[f'REDSHIFT_UNAME_{env.upper()}']
             password = os.environ[f'REDSHIFT_PASSWORD_{env.upper()}']
@@ -70,7 +70,7 @@ class rsClient():
                 logging.error(f'Issue copying {file} into staging table. Exiting')
                 logging.error(f'message: {e}', exc_info=True)
                 sys.exit(1)
-        logging.info(f'Succesfully loaded all files in temp staging table')
+        logging.info('Succesfully loaded all files in temp staging table')
         return
 
     def _upsert(self, rs_target, rs_stage, upsert_keys):
@@ -102,7 +102,7 @@ class rsClient():
                 """)
             logging.info(f'UPSERT succesfull for {rs_stage}')
         except Exception as e:
-                logging.error(f'Issue UPSERTING stage into target. Exiting...')
+                logging.error('Issue UPSERTING stage into target. Exiting...')
                 logging.error(f'message: {e}', exc_info=True)
                 sys.exit(1)
     
@@ -123,7 +123,7 @@ class rsClient():
                 """)
             logging.info(f'FULL REFRESH succesfull for {rs_target}')
         except Exception as e:
-                logging.error(f'Issue REFRESHING target. Exiting...')
+                logging.error('Issue REFRESHING target. Exiting...')
                 logging.error(f'message: {e}', exc_info=True)
                 sys.exit(1)
     
@@ -214,8 +214,18 @@ class rsClient():
         return
 
     def rs_to_df(self, dml):
-        df = pd.read_sql_query(dml, self.conn)
-        return df
+        return pd.read_sql_query(dml, self.conn)
+
+    
+    def rs_fetch_single_val(self, query):
+        result = None
+        with self.conn.cursor() as cur:
+            cur.execute(query)
+            result = cur.fetchone()
+            self.conn.commit()
+        return result[0]
+
+    
 
     def rs_column_to_api_query_param_list(self, rs_source_schema:str, rs_source_table:str, rs_source_column:str, api_query_params:str):
         """
