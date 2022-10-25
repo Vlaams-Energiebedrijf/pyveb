@@ -174,3 +174,23 @@ class s3Client():
             logging.error(e)
             sys.exit(1)
         return local_file
+
+    def download_s3_to_memory(self, file:str):
+        """
+            !! only tested for csv files 
+
+            Returns: 
+                filestream object with pointer at position 0
+        """
+        try: 
+            file = file.split('//')[1].split('/',1)[1]
+            obj = self.bucket.Object(file)
+            file_stream = BytesIO()
+            obj.download_fileobj(file_stream)
+            # https://stackoverflow.com/questions/61690731/pandas-read-csv-from-bytesio
+            file_stream.seek(0)
+        except Exception as e:
+            logging.error(f'Issue downloading {file} to memory stream. Exiting...')
+            logging.error(e)
+            sys.exit(1)
+        return file_stream
