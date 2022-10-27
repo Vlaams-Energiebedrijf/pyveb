@@ -141,6 +141,7 @@ class rsClient():
     
 
     def _full_refresh(self, rs_target, rs_stage):
+        # delete is slow but it is not possible to do a truncate within an atomic transaction
         try:
             self._query(f"""
                     begin transaction;
