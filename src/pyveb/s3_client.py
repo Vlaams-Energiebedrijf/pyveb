@@ -56,9 +56,7 @@ class s3Client():
             response = self.client.list_objects_v2(**kwargs)
             truncated = response["IsTruncated"]
             if "Contents" in response:
-                for record in response["Contents"]:
-                    filename = record["Key"]
-                    files.append(filename)
+                files.extend(record["Key"] for record in response["Contents"])
                 if truncated:
                     kwargs["ContinuationToken"] = response["NextContinuationToken"]
         files = files[:max_files]
@@ -84,7 +82,7 @@ class s3Client():
             Returns boolean
         '''
         if not s3_prefix.endswith('/'):
-            s3_prefix = s3_prefix+'/' 
+            s3_prefix += '/'
         resp = self.client.list_objects(Bucket=self.bucket_name, Prefix=s3_prefix, Delimiter='/', MaxKeys=1)
         return 'Contents' in resp, 'CommonPrefixes' in resp
 
@@ -128,7 +126,7 @@ class s3Client():
         target_file_name = local_file.split('/')[-1]
         target_file = f'{s3_prefix}{target_file_name}'
         try: 
-            logging.info(f'Uploading file ...')
+            logging.info('Uploading file ...')
             self.client.upload_file(local_file, self.bucket_name, target_file)
             logging.info(f'Uploaded {local_file} to {target_file}')
         except Exception as e: 
@@ -148,7 +146,7 @@ class s3Client():
                 None
 
             ADDITIONAL INFO
-                DF will be read into memory and stored in S3 as parquet under key s3_prefix/1562388.0020_s3_filename.parquet
+                DF will be read into memory and stored in S3 as parquet under key s3_prefix/1562388.0020_s3_file_name.parquet
         """
         timestamp = round(time.time(), 4)
         parquet_buffer = BytesIO()
@@ -157,8 +155,29 @@ class s3Client():
         parquet_buffer.seek(0)
         self.bucket.upload_fileobj(parquet_buffer, s3_key)
         return
-        
-        
+
+    def df_to_csv_s3(self, df: pd.DataFrame, s3_prefix:str, s3_file_name:str, delimiter=",") -> None:
+        """
+            ARGUMENTS
+                df: pandas dataframe
+                s3_prefix: target_folder/sub_folder
+                s3_file_name: name of the file without extension. A timestamp will be added within the function. Eg, file_name = pipeline_name
+                delimiter: df will be converted to a csv file with the provided delimiter
+            
+            RETURNS
+                None
+
+            ADDITIONAL INFO
+                Dataframe will be read into memory and stored in S3 as parquet under key s3_prefix/1562388.0020_s3_file_name.csv
+        """
+        timestamp = round(time.time(), 4)
+        csv_buffer = BytesIO()
+        df.to_csv(csv_buffer, index=False, sep=delimiter)
+        s3_key = f'{s3_prefix}{timestamp}_{s3_file_name}.csv'
+        csv_buffer.seek(0)
+        self.bucket.upload_fileobj(csv_buffer, s3_key)
+        return 
+
     def download_s3_to_local_file(self, file:str, file_extension = 'parquet', download_path='./data') -> str:
         if not download_path.endswith('/'):
             download_path = f'{download_path}/'
@@ -194,3 +213,6 @@ class s3Client():
             logging.error(e)
             sys.exit(1)
         return file_stream
+
+
+  
