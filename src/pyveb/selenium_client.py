@@ -101,7 +101,6 @@ class seleniumClient():
                 local_file = self._create_local_dir(file_name, file_extension)
                 self.driver.get(self.url)
                 element = self.driver.find_element(getattr(By, element_type), element_name)
-                sub_element = element.find_element(getattr(By, element_type), element_name)
                 file_url = element.get_attribute('href')
                 daily_file = urllib.request.URLopener()
                 daily_file.retrieve(file_url, local_file )
