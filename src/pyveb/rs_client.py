@@ -106,6 +106,40 @@ class rsClient():
                 logging.error(f'message: {e}', exc_info=True)
                 sys.exit(1)
     
+
+    def _upsert_non_lynx(self, rs_target, rs_stage, upsert_keys):
+        where_condition_target = ''
+        counter = 0
+        for col in upsert_keys:
+            if counter == 0:
+                line_target = f'{rs_target}.{col} = {rs_stage}.{col}'
+            else:
+                line_target = f'AND {rs_target}.{col} = {rs_stage}.{col}'
+            where_condition_target += str(line_target)
+            counter =+ 1
+        try:
+            self._query(f"""
+                    begin transaction;
+
+                    DELETE FROM {rs_target} 
+                    USING {rs_stage} 
+                    WHERE {where_condition_target} 
+                    ;
+                    
+                    INSERT INTO {rs_target}
+                    SELECT *
+                    FROM {rs_stage};
+
+                    DROP TABLE {rs_stage};
+                    end transaction;
+                """)
+            logging.info(f'UPSERT based on version succesfull for {rs_stage}')
+        except Exception as e:
+                logging.error('Issue UPSERTING stage into target. Exiting...')
+                logging.error(f'message: {e}', exc_info=True)
+                sys.exit(1)
+
+
     def _upsert_version(self, rs_target, rs_stage, upsert_keys):
         where_condition_target = ''
         counter = 0
@@ -166,13 +200,14 @@ class rsClient():
     def _append(self):
         None
 
-    def upsert(self, files, rs_target_schema, rs_target_table, upsert_keys):
+    def upsert(self, files, rs_target_schema, rs_target_table, upsert_keys, lynx=True, version=False):
         """
             ARGUMENTS
                 files: list of parquet files (eg. ['s3://bucket/folder/sub/file.parquet', ...])
                 rs_target_schema: redshift target schema (eg. 'ingest)
                 rs_target_table: redshift target table (eg. 'cogenius_xxx')
                 upsert_keys: list of fields to match records between the source (ie. stage) and target, in order to identify which records already exist
+                lynx: boolean if true, datecreated/datemodifed or version will be taken into account (depending on version argument). If false, only upsert keys are taken into account
                             
             RETURNS
                 None
@@ -187,9 +222,14 @@ class rsClient():
         rs_stage = f'{rs_target}_TEMP_STAGE'
         self._create_stage_like_target(rs_target, rs_stage)
         self._copy_parquet_into_stage(files, rs_stage)
-        self._upsert(rs_target, rs_stage, upsert_keys)
+        if lynx: 
+            self._upsert(rs_target, rs_stage, upsert_keys)
+        else:
+            self._upsert_non_lynx(rs_target, rs_stage, upsert_keys)
         return
 
+
+    # REFACTOR - add to def upsert() with version boolean (lynx=true, version=true)
     def upsert_version(self, files, rs_target_schema, rs_target_table, upsert_keys):
         """
             ARGUMENTS
