@@ -148,12 +148,14 @@ class s3Client():
             ADDITIONAL INFO
                 DF will be read into memory and stored in S3 as parquet under key s3_prefix/1562388.0020_s3_file_name.parquet
         """
+        logging.info('Starting upload')
         timestamp = round(time.time(), 4)
         parquet_buffer = BytesIO()
         df.to_parquet(parquet_buffer, index=False, allow_truncated_timestamps=True)
         s3_key = f'{s3_prefix}{timestamp}_{s3_file_name}.parquet'
         parquet_buffer.seek(0)
         self.bucket.upload_fileobj(parquet_buffer, s3_key)
+        logging.info(f'Uploaded dataframe to {s3_key}')
         return
 
     def df_to_csv_s3(self, df: pd.DataFrame, s3_prefix:str, s3_file_name:str, delimiter=",") -> None:
