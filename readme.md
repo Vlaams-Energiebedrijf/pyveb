@@ -23,6 +23,8 @@ from pyveb import selenium_client
 
 Package is automaticly deployed to pypi via github actions. Just commit and open a pull request. During the action workflow, the version will be automatically bumped and updated pyproject.toml is commited back. 
 
+! in case a dependency is added to pyproject.toml, no workflow is started unless there are also changes to src/pyveb/** 
+
 
 
 

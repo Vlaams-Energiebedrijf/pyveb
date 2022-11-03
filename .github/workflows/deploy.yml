@@ -7,7 +7,6 @@ on:
     paths: # only trigger docker builds when changes are made to src
       - 'src/pyveb/**'
 
-
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
