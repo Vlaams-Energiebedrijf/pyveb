@@ -6,8 +6,6 @@ on:
       - 'main'
     paths: # only trigger docker builds when changes are made to src
       - 'src/pyveb/**'
-      - 'pyproject.toml'
-
 
 jobs:
   build-and-push:
