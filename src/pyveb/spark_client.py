@@ -133,7 +133,7 @@ class sparkClient():
             sys.exit(1)
         return united_df
     
-    def read_multiple_parquet_files(self, files: List[str], schema: Dict[str, StructField]) -> SparkDataFrame:
+    def read_multiple_parquet_files(self, files: List[str], schema: Dict[str, StructField] = None) -> SparkDataFrame:
         try:
             list_of_dfs = []
             for file in files:
