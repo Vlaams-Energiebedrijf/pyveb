@@ -1,4 +1,3 @@
-import xlrd
 import pandas as pd
 import requests
 import logging
@@ -7,6 +6,7 @@ from functools import wraps
 import shutil
 import contextlib
 from typing import Tuple
+import xlrd
 
 # retry decorator with adjustable nbr of retries and retry attempt passed to wrapped function as keyword argument 'attempt'
 def retry(retries: int, **fkwargs):
