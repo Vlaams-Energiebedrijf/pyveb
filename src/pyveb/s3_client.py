@@ -241,17 +241,17 @@ class externalS3Client():
         )
         self.s3 = session_ext.resource('s3')
 
-    def put_object(self, s3_prefix:str, file_name:str):
+    def put_object(self, s3_prefix:str, local_file:str, ext_file_name:str):
         """ 
             puts an object inside the external bucket
             inside the specified directory, with the specified filename
         """
-        data = open(file_name, 'rb')
+        data = open(local_file, 'rb')
         try:
-            self.s3.Bucket(self.bucket).put_object(Key=f"{s3_prefix}/{file_name}", Body=data)
+            self.s3.Bucket(self.bucket).put_object(Key=f"{s3_prefix}/{ext_file_name}", Body=data)
             logging.info(f"stored in external s3 bucket: {self.bucket}")
         except Exception as e:
-            logging.error(f"Could not store file: {file_name} in external s3 bucket")
+            logging.error(f"Could not store file: {ext_file_name} in external s3 bucket")
             logging.error(e)
             sys.exit(1)
 
