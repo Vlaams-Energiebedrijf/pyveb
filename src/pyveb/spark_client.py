@@ -1,3 +1,4 @@
+
 import contextlib
 import pandas as pd
 import shutil, os
@@ -16,8 +17,13 @@ from pyspark.sql.types import StructType, StructField, StringType, IntegerType, 
 import boto3
 from requests import session
 
-
 class sparkClient():
+    """
+        !!! env is currently passed via **kwargs but this is a mandatory field! Should be refactored 
+        
+        In case we want to read straight from s3 into spark assumed_role kwarg needs to be provided
+    
+    """
 
     def __init__(self, s3_client, s3_bucket, s3_target_prefix, partition_start, **kwargs):
         self.s3_bucket = s3_bucket
@@ -39,7 +45,6 @@ class sparkClient():
         secret_key = credentials[1]
         session_token = credentials[2]
         return access_key, secret_key, session_token
-
 
     def _create_spark_session(self):
          # https://stackoverflow.com/questions/50891509/apache-spark-codegen-stage-grows-beyond-64-kb 
@@ -72,7 +77,7 @@ class sparkClient():
             # .config("fs.s3a.aws.credentials.provider","com.amazonaws.auth.InstanceProfileCredentialsProvider")\
             # "fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem"
             # .config('spark.sql.parquet.filterPushdown', 'false') \
-            spark.sparkContext.setLogLevel("OFF")
+            spark.sparkContext.setLogLevel("ERROR")
             logging.info(f"Spark Session Spark_{self.s3_prefix} created")
         except Exception as e:
             logging.error("Issue creating Spark Session. Exiting...")
@@ -115,17 +120,18 @@ class sparkClient():
             sys.exit(1)
         return new_df
 
-    def read_multiple_csv_files(self, files: List[str], schema: Dict[str, StructField], header: str = "true", delimiter: str = ";") -> SparkDataFrame:
+    def read_multiple_csv_files(self, files: List[str], schema: Dict[str, StructField] = None, header: str = "true", delimiter: str = ";") -> SparkDataFrame:
         try:
             list_of_dfs = []
             for file in files:
+                file = file.replace('s3://', 's3a://')
                 df = self.spark.read.format("csv").option("header",header).option("delimiter", delimiter).load(file)
                 if schema:
                     new_df = self.enforce_schema(df, schema)
                     list_of_dfs.append(new_df)
                 else:
                     list_of_dfs.append(df)
-            united_df = reduce(self.unite_dfs, list_of_dfs)
+            united_df = reduce(self._unite_dfs, list_of_dfs)
             logging.info("Succesfully read all files in a spark DF")
         except Exception as e:
             logging.error("Issue reading parquet files and unioning them in spark DF Exiting...")
@@ -137,13 +143,14 @@ class sparkClient():
         try:
             list_of_dfs = []
             for file in files:
+                file = file.replace('s3://', 's3a://')
                 df = self.spark.read.format("parquet").load(file)
                 if schema:
                     new_df = self.enforce_schema(df, schema)
                     list_of_dfs.append(new_df)
                 else:
                     list_of_dfs.append(df)
-            united_df = reduce(self.unite_dfs, list_of_dfs)
+            united_df = reduce(self._unite_dfs, list_of_dfs)
             logging.info("Succesfully read all files in a spark DF")
         except Exception as e:
             logging.error("Issue reading parquet files and unioning them in spark DF Exiting...")
@@ -261,4 +268,7 @@ class sparkClient():
             logging.error(e)
             sys.exit(1)
         return 
+
+    def spark_df_to_pandas_df(self, df: SparkDataFrame) -> pd.DataFrame:
+        return df.toPandas()
 
