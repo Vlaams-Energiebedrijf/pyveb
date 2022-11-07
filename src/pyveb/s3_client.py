@@ -217,4 +217,44 @@ class s3Client():
         return file_stream
 
 
+class externalS3Client():
+
+    def __init__(self, aws_access_key_id_name:str, aws_secret_access_key_name:str , ext_bucket:str):
+        """ 
+            ARGS
+                aws_access_key_id_name: environment variable holding aws_access_key_id
+                aws_secret_access_key_name: environment variable holding aws_secret_access_key_name
+                ext_bucket: external bucket name without 's3://" eg, ext_bucket_name
+        
+        """
+        self.bucket = ext_bucket
+        try:
+            aws_access_key_id=os.environ[aws_access_key_id_name]
+            aws_secret_access_key = os.environ[aws_secret_access_key_name]
+        except Exception: 
+            logging.error('AWS credentials for external account not found. Exiting...')
+            sys.exit(1)
+
+        session_ext = boto3.Session(
+                aws_access_key_id=aws_access_key_id,
+                aws_secret_access_key=aws_secret_access_key
+        )
+        self.s3 = session_ext.resource('s3')
+
+    def put_object(self, s3_prefix:str, file_name:str):
+        """ 
+            puts an object inside the external bucket
+            inside the specified directory, with the specified filename
+        """
+        data = open(file_name, 'rb')
+        try:
+            self.s3.Bucket(self.bucket).put_object(Key=f"{s3_prefix}/{file_name}", Body=data)
+            logging.info(f"stored in external s3 bucket: {self.bucket}")
+        except Exception as e:
+            logging.error(f"Could not store file: {file_name} in external s3 bucket")
+            logging.error(e)
+            sys.exit(1)
+
+    
+
   
