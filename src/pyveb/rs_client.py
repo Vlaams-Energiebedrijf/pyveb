@@ -11,7 +11,9 @@ class rsClient():
     def __init__(self, env, rs_iam_role):
         """
             When deploying, environment variables are injected depending on ENV via entrypoint.sh.
-            For local development, we fetch environemnt variables from local enviroment where we have variables for dev and prd, hence the except statement.
+            For local development, we fetch environemnt variables from local enviroment where we have variables for local, dev and prd, hence the except statement.
+
+            ! since we don't have a local redshift cluster we load into redshift dev 
         """
         try:
             dbname=os.environ['REDSHIFT_DB']
