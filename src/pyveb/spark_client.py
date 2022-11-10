@@ -232,6 +232,34 @@ class sparkClient():
                 res = x
         return res
 
+    @staticmethod
+    @udf
+    def udf_string_to_int(x):
+        if x is None or x =='':
+            res = None
+        else:
+            try:
+                # https://stackoverflow.com/questions/1841565/valueerror-invalid-literal-for-int-with-base-10 
+                res = int(x)
+            except AttributeError:
+                res = x
+        return res
+
+    @staticmethod
+    @udf
+    def udf_string_to_timestamp(x):
+        if x is None or x =='':
+            res = None
+        else:
+            x = x.split('.')[0]
+            date_format = '%Y-%m-%d %H:%M:%S'
+            try:
+                # https://stackoverflow.com/questions/1841565/valueerror-invalid-literal-for-int-with-base-10 
+                res = datetime.datetime.strptime(x, date_format)
+            except AttributeError:
+                res = x
+        return res
+
     def convert_float_to_int_int(self, df: SparkDataFrame, cols: list) -> SparkDataFrame:
         """
             When reading from SQL, columns which are INT but contain only NULLS get converted to parquet float columns.
@@ -243,6 +271,32 @@ class sparkClient():
             logging.info("Succesfully converted float columns back to int")
         except Exception as e:
             logging.error("Issue converting float columns to int. Exiting...")
+            logging.error(e)
+            sys.exit(1)
+        return new_df
+
+    def convert_string_to_int_int(self, df: SparkDataFrame, cols: list) -> SparkDataFrame:
+        """
+            Convert string cols to int
+        """
+        try: 
+            new_df = df.select(*[self.udf_string_to_int(column).cast(IntegerType()).alias(column) if column in cols else column for column in df.columns])
+            logging.info("Succesfully converted str columns to int")
+        except Exception as e:
+            logging.error("Issue converting str columns to int. Exiting...")
+            logging.error(e)
+            sys.exit(1)
+        return new_df
+
+    def convert_string_to_timestamp(self, df: SparkDataFrame, cols: list) -> SparkDataFrame:
+        """
+            Convert string cols to int
+        """
+        try: 
+            new_df = df.select(*[self.udf_string_to_timestamp(column).cast(TimestampType()).alias(column) if column in cols else column for column in df.columns])
+            logging.info("Succesfully converted string columns to timestamp")
+        except Exception as e:
+            logging.error("Issue converting str columns to timestamp. Exiting...")
             logging.error(e)
             sys.exit(1)
         return new_df
@@ -271,4 +325,6 @@ class sparkClient():
 
     def spark_df_to_pandas_df(self, df: SparkDataFrame) -> pd.DataFrame:
         return df.toPandas()
+
+
 
