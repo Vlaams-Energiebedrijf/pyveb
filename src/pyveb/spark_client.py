@@ -258,7 +258,7 @@ class sparkClient():
                 res = datetime.datetime.strptime(x, date_format)
             except AttributeError:
                 res = x
-        return res
+        return str(res)
 
     def convert_float_to_int_int(self, df: SparkDataFrame, cols: list) -> SparkDataFrame:
         """
@@ -293,6 +293,8 @@ class sparkClient():
             Convert string cols to int
         """
         try: 
+            print('cols')
+            print(cols)
             new_df = df.select(*[self.udf_string_to_timestamp(column).cast(TimestampType()).alias(column) if column in cols else column for column in df.columns])
             logging.info("Succesfully converted string columns to timestamp")
         except Exception as e:
@@ -325,6 +327,5 @@ class sparkClient():
 
     def spark_df_to_pandas_df(self, df: SparkDataFrame) -> pd.DataFrame:
         return df.toPandas()
-
 
 
