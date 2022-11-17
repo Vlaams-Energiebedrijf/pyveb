@@ -172,9 +172,9 @@ def multiprocessing(func, input_list, *args, max_workers=cores, **kwargs):
             https://docs.python.org/3/library/concurrent.futures.html#processpoolexecutor
 
         RETURNS
-            (dict(item: func return value ), dict(item: func error ))
+            (dict(item: function return value ), dict(item: function error ))
 
-            ! item is the item from the list we pass as first positional argument of the function. 
+            !!! item is the item from the list we pass as first positional argument of the function. 
 
         ! multiprocessing list of list not tested yet
     """
