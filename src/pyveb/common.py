@@ -15,8 +15,7 @@ class dotdict(dict):
     __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__
 
-
-def get_config(): 
+def get_config():
     """
         RETURN
             config object enabling fetching of config from config.yml via dot notation
@@ -26,14 +25,13 @@ def get_config():
     """
     caller_file = os.path.dirname(inspect.stack()[1].filename)
     try: 
-        with open(caller_file + '/config.yml') as file:
+        with open(f'{caller_file}/config.yml') as file:
             config = yaml.load(file, Loader=yaml.FullLoader)
-    except:
-        with open(caller_file + '/../config.yml') as file:
+    except Exception:
+        with open(f'{caller_file}/../config.yml') as file:
             config = yaml.load(file, Loader=yaml.FullLoader)
     config = dotdict(config)
     return config
-
 
 def create_partition_key(partition_date:str) -> str:
     """
@@ -43,15 +41,13 @@ def create_partition_key(partition_date:str) -> str:
         RETURN
             year=2020/month=01/day=01/    
     """
-    format = "%Y-%m-%d"
     if not isinstance(partition_date, date):
-        partition_date = datetime.strptime(partition_date, format)
+        date_format = "%Y-%m-%d"
+        partition_date = datetime.strptime(partition_date, date_format)
     day = '{:02d}'.format(partition_date.day)
     month = '{:02d}'.format(partition_date.month)
     year = partition_date.year
     return f"year={year}/month={month}/day={day}/"
-
-
 
 def get_args(args):
     """
@@ -116,9 +112,11 @@ def get_args(args):
         sys.exit(1)
     return env, pipeline_type, partition_start, partition_end, partition_key
 
-
 def chunker(seq, size):
     """
+        ARGUMENTS: 
+            seq: list of items
+            size: 
         process list in batches of size 
         eg. for group in chunker(list, 100):
                     print(group)
@@ -126,19 +124,28 @@ def chunker(seq, size):
     return (seq[pos:pos + size] for pos in range(0, len(seq), size))
 
 
-def multithreading_list(func, list, *args, max_workers=cores, **kwargs):
+def multithreading_list(func, input_list, *args, max_workers=cores, **kwargs):
     """
-        Multithreading of a function an a input list. Use for heavy IO operations
-        If no workers are specified, it will default to the number of processors on the machine
-        https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.ThreadPoolExecutor
-        Returns 2 dictionaries: 
-            filename: dataframes 
-            filename: error
+        ARGUMENTS
+            func: function we want to execute in multithreading mode on a list of items
+            input_list: list of items. Items from this list are passed as the first positional arg of func
+            *args: additional positional args we want to pass to func
+            max_workers: amount of threads used. Defaults to nbr of physical cores of the machine
+            **kwargs: additional kwargs we want to pass to func
+
+        INFO
+            Use for heavy IO operations
+            https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.ThreadPoolExecutor
+
+        RETURNS
+            (dict(item: func return value ), dict(item: func error ))
+
+            ! item is the item from the list we pass as first positional argument of the function. 
     """
     results = {}
     errors= {}
     with ThreadPoolExecutor(max_workers) as executor:
-        future_to_x = {executor.submit(func, x, *args, **kwargs): x for x in list}
+        future_to_x = {executor.submit(func, x, *args, **kwargs): x for x in input_list}
         for future in as_completed(future_to_x):
             x = future_to_x[future]
             try:
@@ -148,3 +155,43 @@ def multithreading_list(func, list, *args, max_workers=cores, **kwargs):
                 errors[x] = exc
                 print('%r generated an exception: %s' % (x, exc))
     return results, errors
+
+
+def multiprocessing(func, input_list, *args, max_workers=cores, **kwargs):
+    """
+        ARGUMENTS
+            func: function we want to execute in multiprocessing mode on a list of items
+            input_iterable: 
+                    list of items. Each item can be another list. Items are passed as the first positional arg of the func.
+                    In case of a list of lists, the inner list is unpacked an passed as multiple positional args. 
+                    Only use list of list in case you want to pass several specific args. In case you want to pass common args, use *args
+            *args: additional common positional args we want to pass to func
+            max_workers: amount of threads used. Defaults to nbr of physical cores of the machine
+            **kwargs: additional kwargs we want to pass to func
+
+        INFO
+            Use for heavy CPU operations
+            https://docs.python.org/3/library/concurrent.futures.html#processpoolexecutor
+
+        RETURNS
+            (dict(item: func return value ), dict(item: func error ))
+
+            ! item is the item from the list we pass as first positional argument of the function. 
+    """
+    results = {}
+    errors= {}
+    with ProcessPoolExecutor(max_workers) as executor:
+        if isinstance(input_list[0], list):
+            future_to_x = {executor.submit(func, *x, *args, **kwargs): x for x in input_list}
+        else:
+            future_to_x = {executor.submit(func, x, *args, **kwargs): x for x in input_list}
+        for future in as_completed(future_to_x):
+            x = future_to_x[future]
+            try:
+                result = future.result()
+                results[x] = result
+            except Exception as exc:
+                errors[x] = exc
+                print('%r generated an exception: %s' % (x, exc))
+    return results, errors
+

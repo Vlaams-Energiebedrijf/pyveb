@@ -152,12 +152,13 @@ class s3Client():
             sys.exit(1)
         return
 
-    def df_to_parquet(self, df: pd.DataFrame, s3_prefix:str, s3_file_name ) -> None:
+    def df_to_parquet(self, df: pd.DataFrame, s3_prefix:str, s3_file_name:str, add_timestamp:bool = True ) -> None:
         """
             ARGUMENTS
                 df: pandas dataframe
                 s3_prefix: target_folder/target_subfolder
-                s3_file_name: name of the file without extension. A timestamp will be added within the function. 
+                s3_file_name: name of the file without extension.  
+                add_timestamp: if True, s3_file_name will be prefxied with a timestamp
 
             RETURNS
                 None
@@ -166,10 +167,13 @@ class s3Client():
                 DF will be read into memory and stored in S3 as parquet under key s3_prefix/1562388.0020_s3_file_name.parquet
         """
         logging.info('Starting upload')
-        timestamp = round(time.time(), 4)
         parquet_buffer = BytesIO()
         df.to_parquet(parquet_buffer, index=False, allow_truncated_timestamps=True)
-        s3_key = f'{s3_prefix}{timestamp}_{s3_file_name}.parquet'
+        if add_timestamp:
+            timestamp = round(time.time(), 4)
+            s3_key = f'{s3_prefix}{timestamp}_{s3_file_name}.parquet'
+        else:
+            s3_key = f'{s3_prefix}{s3_file_name}.parquet'
         parquet_buffer.seek(0)
         self.bucket.upload_fileobj(parquet_buffer, s3_key)
         logging.info(f'Uploaded dataframe to {s3_key}')
