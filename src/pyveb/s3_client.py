@@ -39,7 +39,6 @@ class s3Client():
             ADDITIONAL INFO 
             Files are automatically unquoted and returned as full path ( ie. s3:://bucket/s3_prefix/filename.extension)
         """
-        
         kwargs = {
             "Bucket": self.bucket_name,
             "Delimiter": "|",
@@ -64,6 +63,24 @@ class s3Client():
         files = [unquote(x) for x in files]
         files = ['s3://'+self.bucket_name+'/'+x for x in files]
         return files
+
+    
+    def list_files_bigger_than(self, s3_prefix:str, file_size_bytes:int = 10000000, file_type:str = 'parquet') -> list:
+        """
+            ARGUMENTS
+                s3_prefix: folder/subfolder/
+                file_size_bytes: optional, eg. 10000000 (note: 10 000 000 = 10mb)
+                file_type: optional, eg. csv, xlsx, parquet
+            RETURNS 
+                List of files from filtered by type and strictly bigger than file_size_bytes
+        """
+
+        big_files = []  
+        for file in self.bucket.objects.filter(Prefix=s3_prefix):
+            if file.size > file_size_bytes and f'.{file_type}' in file.key:
+                file_name = f's3://{self.s3_bucket}/{file.key}'  
+                big_files.append(file_name)
+        return big_files
 
     def _delete_prefix(self, s3_prefix:str ) -> None:
         """
