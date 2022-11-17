@@ -1,4 +1,3 @@
-
 import boto3
 from urllib.parse import unquote
 import os, sys, time
@@ -64,7 +63,6 @@ class s3Client():
         files = ['s3://'+self.bucket_name+'/'+x for x in files]
         return files
 
-    
     def list_files_bigger_than(self, s3_prefix:str, file_size_bytes:int = 10000000, file_type:str = 'parquet') -> list:
         """
             ARGUMENTS
@@ -74,11 +72,10 @@ class s3Client():
             RETURNS 
                 List of files from filtered by type and strictly bigger than file_size_bytes
         """
-
         big_files = []  
         for file in self.bucket.objects.filter(Prefix=s3_prefix):
             if file.size > file_size_bytes and f'.{file_type}' in file.key:
-                file_name = f's3://{self.s3_bucket}/{file.key}'  
+                file_name = f's3://{self.bucket_name}/{file.key}'  
                 big_files.append(file_name)
         return big_files
 
@@ -237,7 +234,6 @@ class s3Client():
             sys.exit(1)
         return file_stream
 
-
 class externalS3Client():
 
     def __init__(self, aws_access_key_id_name:str, aws_secret_access_key_name:str , ext_bucket:str):
@@ -276,6 +272,3 @@ class externalS3Client():
             logging.error(e)
             sys.exit(1)
 
-    
-
-  

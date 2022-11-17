@@ -123,7 +123,6 @@ def chunker(seq, size):
     """
     return (seq[pos:pos + size] for pos in range(0, len(seq), size))
 
-
 def multithreading_list(func, input_list, *args, max_workers=cores, **kwargs):
     """
         ARGUMENTS
@@ -156,7 +155,6 @@ def multithreading_list(func, input_list, *args, max_workers=cores, **kwargs):
                 print('%r generated an exception: %s' % (x, exc))
     return results, errors
 
-
 def multiprocessing(func, input_list, *args, max_workers=cores, **kwargs):
     """
         ARGUMENTS
@@ -177,6 +175,8 @@ def multiprocessing(func, input_list, *args, max_workers=cores, **kwargs):
             (dict(item: func return value ), dict(item: func error ))
 
             ! item is the item from the list we pass as first positional argument of the function. 
+
+        ! multiprocessing list of list not tested yet
     """
     results = {}
     errors= {}
