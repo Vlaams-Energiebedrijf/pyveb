@@ -51,12 +51,20 @@ class rsClient():
             self.conn.commit()
         return 
 
-    def _create_stage_like_target(self,rs_target, rs_stage):
+    def _create_stage_like_target(self,rs_target: str, rs_stage:str, drop_sort_key:bool = False) -> None:
+        """
+            Checks if staging table exists and drops it. Creates new staging table like target table.
+            Drops meta_loading_date_utc column since it is not possible to insert with this column which is populated by database system date when copying stage into target
+            In case meta_loading_date_utc has a sort key on target, this sort key needs to be removed first before being able to drop the column. Use drop_sort_key=True in this case
+        """
         self._query(f"""DROP TABLE IF EXISTS {rs_stage}""")
         self._query(f"""CREATE TABLE {rs_stage} (LIKE {rs_target})""")
         self._enable_autocommit() 
+        if drop_sort_key:
+            self._query(f"""ALTER TABLE {rs_stage} ALTER SORTKEY none """)
         self._query(f"""ALTER TABLE {rs_stage} DROP COLUMN meta_loading_date_utc""")
         self._disable_autocommit()
+        return
 
     def _copy_parquet_into_stage(self, files, rs_stage):
         for file in files:
@@ -304,12 +312,13 @@ class rsClient():
         self._full_refresh(rs_target, rs_stage)
         return
 
-    def append(self, files, rs_target_schema, rs_target_table):
+    def append(self, files: list, rs_target_schema:str, rs_target_table:str, drop_sort_key:bool = False) -> None:
         """
             ARGUMENTS
                 files: list of parquet files (eg. ['s3://bucket/folder/sub/file.parquet', ...])
                 rs_target_schema: redshift target schema (eg. 'ingest)
                 rs_target_table: redshift target table (eg. 'dnb_continual')
+                drop_sort_key: boolean, ensure True in case target table has a sort key on meta_loading_date_utc
                             
             RETURNS
                 None
@@ -319,13 +328,14 @@ class rsClient():
         """
         rs_target = f'{rs_target_schema}.{rs_target_table}'
         rs_stage = f'{rs_target}_TEMP_STAGE'
-        self._create_stage_like_target(rs_target, rs_stage)
+        self._create_stage_like_target(rs_target, rs_stage, drop_sort_key=drop_sort_key)
         self._copy_parquet_into_stage(files, rs_stage)
         self._append(rs_target, rs_stage)
         return
 
      # Not tested yet
     def load_copy_csv(self, s3_bucket, s3_prefix, rs_target, iam_role, delimiter, columns=None, timeformat='YYYY-MM-DDTHH:MI:SS'):
+        # sourcery skip: none-compare
         """
             s3_bucket: bucket
             s3_prefix: path/path/path/
@@ -424,6 +434,7 @@ class rsClient():
         return path_params
 
     def stream_to_s3_parquet(self, query:str, batch_size:int, s3_bucket:str, s3_prefix:str, s3_filename:str) -> None:
+        # sourcery skip: identity-comprehension
         """
             Streams the results of a sql query to parquet files on s3 with 'batch_size' nbr of rows per file. 
             Output files have the following key:
