@@ -76,6 +76,11 @@ class rsClient():
         return
 
     def _upsert(self, rs_target, rs_stage, upsert_keys):
+        """
+            Upserts from rs_stage into rs_target based on upsert_keys and datemodified and datecreated.
+            
+            Use for upserting lynx source data
+        """
         where_condition_target = ''
         counter = 0
         for col in upsert_keys:
@@ -108,8 +113,10 @@ class rsClient():
                 logging.error(f'message: {e}', exc_info=True)
                 sys.exit(1)
     
-
     def _upsert_non_lynx(self, rs_target, rs_stage, upsert_keys):
+        """
+            Upserts from rs_stage into rs_target based on upsert_keys. 
+        """
         where_condition_target = ''
         counter = 0
         for col in upsert_keys:
@@ -141,8 +148,10 @@ class rsClient():
                 logging.error(f'message: {e}', exc_info=True)
                 sys.exit(1)
 
-
     def _upsert_version(self, rs_target, rs_stage, upsert_keys):
+        """
+            Upserts from rs_stage into rs_target based on upsert_keys and version. Use for lynx tables without datecreated/datemodified
+        """
         where_condition_target = ''
         counter = 0
         for col in upsert_keys:
@@ -175,8 +184,10 @@ class rsClient():
                 logging.error(f'message: {e}', exc_info=True)
                 sys.exit(1)
     
-
     def _full_refresh(self, rs_target, rs_stage):
+        """
+            Deletes all data in target table followed by inserting all data from stage into target. 
+        """
         # delete is slow but it is not possible to do a truncate within an atomic transaction
         try:
             self._query(f"""
@@ -198,9 +209,26 @@ class rsClient():
                 logging.error(f'message: {e}', exc_info=True)
                 sys.exit(1)
     
-    # TO DO 
-    def _append(self):
-        None
+    def _append(self, rs_target, rs_stage):
+        """
+            Appends all data from stage into table target. 
+        """
+        try:
+            self._query(f"""
+                    begin transaction;
+                    
+                    INSERT INTO {rs_target}
+                    SELECT *
+                    FROM {rs_stage};
+
+                    DROP TABLE {rs_stage};
+                    end transaction;
+                """)
+            logging.info(f'Append succesfull for {rs_target}')
+        except Exception as e:
+                logging.error('Issue appending stage into target. Exiting...')
+                logging.error(f'message: {e}', exc_info=True)
+                sys.exit(1)
 
     def upsert(self, files, rs_target_schema, rs_target_table, upsert_keys, lynx=True, version=False):
         """
@@ -229,7 +257,6 @@ class rsClient():
         else:
             self._upsert_non_lynx(rs_target, rs_stage, upsert_keys)
         return
-
 
     # REFACTOR - add to def upsert() with version boolean (lynx=true, version=true)
     def upsert_version(self, files, rs_target_schema, rs_target_table, upsert_keys):
@@ -275,6 +302,26 @@ class rsClient():
         self._create_stage_like_target(rs_target, rs_stage)
         self._copy_parquet_into_stage(files, rs_stage)
         self._full_refresh(rs_target, rs_stage)
+        return
+
+    def append(self, files, rs_target_schema, rs_target_table):
+        """
+            ARGUMENTS
+                files: list of parquet files (eg. ['s3://bucket/folder/sub/file.parquet', ...])
+                rs_target_schema: redshift target schema (eg. 'ingest)
+                rs_target_table: redshift target table (eg. 'dnb_continual')
+                            
+            RETURNS
+                None
+
+            ADDITIONAL INFO
+                Records will be appended via insert into
+        """
+        rs_target = f'{rs_target_schema}.{rs_target_table}'
+        rs_stage = f'{rs_target}_TEMP_STAGE'
+        self._create_stage_like_target(rs_target, rs_stage)
+        self._copy_parquet_into_stage(files, rs_stage)
+        self._append(rs_target, rs_stage)
         return
 
      # Not tested yet
