@@ -175,8 +175,7 @@ class rsClient():
 
                     DELETE FROM {rs_target} 
                     USING {rs_stage} 
-                    WHERE {where_condition_target} AND
-                        {rs_stage}.version > {rs_target}.version
+                    WHERE {where_condition_target} 
                     ;
                     
                     INSERT INTO {rs_target}
