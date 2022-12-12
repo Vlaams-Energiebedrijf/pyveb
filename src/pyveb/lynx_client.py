@@ -6,14 +6,19 @@ import pyodbc
 from time import time
 from io import BytesIO
 import boto3
+import random
+from time import sleep
 
 """
     https://github.com/mkleehammer/pyodbc/wiki/Data-Types
 
-
 """
 
 class lynxClient():
+
+    CONN_RETRIES = 3
+    BACKOFF_IN_SECONDS = 5
+
     def __init__(self):
         """
             At runtime, environment variables are injected via entrypoint.sh.
@@ -27,7 +32,7 @@ class lynxClient():
             username = os.environ['LYNX_USERNAME']
             password = os.environ['LYNX_PASSWORD']
             server = f'{server_raw},{port}'
-            logging.info(f"Fetched lynx credentials from environment variables")
+            logging.info("Fetched lynx credentials from environment variables")
         except Exception as e:
             logging.error("Issue fetching lynx credentials from environment variables. Exiting...")
             logging.error(e)
@@ -40,17 +45,36 @@ class lynxClient():
             logging.info("Succesfully set up connection with Lynx SQL Server")
         except Exception as e:
             logging.error("Unable to establish connection with Lynx SQL Server. Exiting")
-            logging.info(e)
+            logging.error(e)
             sys.exit(1)
         return
 
-    def _connect(self,connection_string:str ):
-        conn = pyodbc.connect(connection_string)
+    def _connect(self,connection_string:str):
+        f"""
+            Connect to Lynx via pyodbc. Automatically retries {self.CONN_RETRIES} times with exponential backoff of {self.BACKOFF_IN_SECONDS}. 
+            Returns Connection or runtime error
+        """
         # https://github.com/mkleehammer/pyodbc/wiki/Unicode
         # conn.setdecoding(pyodbc.SQL_CHAR, encoding='latin1', to=str)
         # conn.setencoding(str, encoding='latin1')
-        return conn
-
+        nbr_of_retries = 0
+        while True:
+            try:
+                return pyodbc.connect(connection_string)
+            except pyodbc.Error as ex:
+                if nbr_of_retries == int(self.CONN_RETRIES)-1:
+                    raise RuntimeError(f'Not able to establish connection with Lynx server after {self.CONN_RETRIES}') from ex
+                sleep_duration = (int(self.BACKOFF_IN_SECONDS) * 2 ** nbr_of_retries + random.uniform(0, 1))
+                sleep(sleep_duration)
+                nbr_of_retries += 1
+                try:
+                    sqlstate = ex.args[1]
+                    sqlstate = sqlstate.split(".")
+                    logging.warning('Issue connecting to Lynx server, trying again')
+                    logging.warning(sqlstate[-3])
+                except Exception:
+                    logging.warning('Issue connecting to Lynx server and error response cannot be parsed. Trying again')
+    
     def query_to_list(self, query:str):
         """
             fetchall() where all rows will be stored in memory
