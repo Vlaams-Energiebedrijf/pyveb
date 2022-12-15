@@ -1,4 +1,3 @@
-
 import contextlib
 import pandas as pd
 import shutil, os
@@ -56,6 +55,7 @@ class sparkClient():
                             .appName(f'Spark_{self.s3_prefix}') \
                             .config('spark.sql.codegen.wholeStage', 'false') \
                             .config("spark.sql.session.timeZone", "UTC") \
+                            .config("spark.sql.legacy.parquet.datetimeRebaseModeInRead", "LEGACY") \
                             .config("fs.s3a.aws.credentials.provider","com.amazonaws.auth.profile.ProfileCredentialsProvider")\
                             .config('spark.jars.packages', 'org.apache.hadoop:hadoop-aws:3.2.0')\
                             .getOrCreate()
@@ -68,6 +68,7 @@ class sparkClient():
                             .config('spark.sql.codegen.wholeStage', 'false') \
                             .config("spark.sql.session.timeZone", "UTC") \
                             .config('spark.jars.packages', 'org.apache.hadoop:hadoop-aws:3.2.0')\
+                            .config("spark.sql.legacy.parquet.datetimeRebaseModeInRead", "LEGACY") \
                             .config('fs.s3a.aws.credentials.provider', 'org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider')\
                             .config('fs.s3a.access.key', access_key)\
                             .config('fs.s3a.secret.key', secret_key)\
@@ -219,6 +220,7 @@ class sparkClient():
 
     def apply_schema(self, df:SparkDataFrame , schema) -> SparkDataFrame:
         return self.spark.createDataFrame(df.collect(), schema = schema)
+        # return self.spark.createDataFrame(df.take(100), schema = schema)
 
     @staticmethod
     @udf
@@ -327,5 +329,25 @@ class sparkClient():
 
     def spark_df_to_pandas_df(self, df: SparkDataFrame) -> pd.DataFrame:
         return df.toPandas()
+
+
+    def clean_old_dates(self, spark_df:SparkDataFrame, cols_to_clean:list) -> SparkDataFrame:
+        """
+            Spark 3.0 has difficulties working with dates older than 1900-01-01.
+
+            org.apache.spark.SparkUpgradeException: You may get a different result due to the upgrading of Spark 3.0: reading dates before 1582-10-15 or timestamps before 1900-01-01T00:00:00Z from Parquet files can be ambiguous, as the files may be written by Spark 2.x or legacy versions of Hive, which uses a legacy hybrid calendar that is different from Spark 3.0+'s Proleptic Gregorian calendar. See more details in SPARK-31404. You can set spark.sql.legacy.parquet.datetimeRebaseModeInRead to 'LEGACY' to rebase the datetime values w.r.t. the calendar difference during reading. Or set spark.sql.legacy.parquet.datetimeRebaseModeInRead to 'CORRECTED' to read the datetime values as it is.
+        
+            Adding datetimeRebaseModeInRead still results in 'mktime argument out of range' errors. Hence, we'll manually clean these dates.
+        """
+        new_df = spark_df.select([
+            F.when(F.col(column) < "1900-01-01 00:00:00", F.lit("1900-01-01 00:00:00"))\
+            .otherwise(F.col(column))\
+            .cast(TimestampType())\
+            .alias(column) if column in cols_to_clean else column for column in spark_df.columns
+            ]
+        )
+        return new_df
+        
+
 
 
