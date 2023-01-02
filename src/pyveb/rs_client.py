@@ -6,6 +6,8 @@ import json
 from io import BytesIO
 import boto3
 from time import time
+from typing import List
+import uuid
 
 class rsClient():
     def __init__(self, env, rs_iam_role):
@@ -66,7 +68,7 @@ class rsClient():
         self._disable_autocommit()
         return
 
-    def _copy_parquet_into_stage(self, files, rs_stage):
+    def _copy_parquet_into_stage(self, files:List[str], rs_stage:str) -> None:
         for file in files:
             try:
                 dml = f"""
@@ -82,12 +84,14 @@ class rsClient():
                 sys.exit(1)
         logging.info('Succesfully loaded all files in temp staging table')
         return
-
-    def _upsert(self, rs_target, rs_stage, upsert_keys):
+    
+    def _upsert(self, rs_target:str, rs_stage:str, upsert_keys:List[str]) -> None:
         """
-            Upserts from rs_stage into rs_target based on upsert_keys and datemodified and datecreated.
+            Upserts from rs_stage into rs_target table. 
             
-            Use for upserting lynx source data
+            1. deletes records in target if upsert key exists in stage
+            2. inserts stage into target
+            3. drops stage
         """
         where_condition_target = ''
         counter = 0
@@ -104,8 +108,7 @@ class rsClient():
 
                     DELETE FROM {rs_target} 
                     USING {rs_stage} 
-                    WHERE {where_condition_target} AND
-                        GREATEST({rs_stage}.datecreated, {rs_stage}.datemodified) >= GREATEST({rs_target}.datecreated, {rs_target}.datemodified)
+                    WHERE {where_condition_target} 
                     ;
                     
                     INSERT INTO {rs_target}
@@ -120,77 +123,32 @@ class rsClient():
                 logging.error('Issue UPSERTING stage into target. Exiting...')
                 logging.error(f'message: {e}', exc_info=True)
                 sys.exit(1)
-    
-    def _upsert_non_lynx(self, rs_target, rs_stage, upsert_keys):
+
+    # TO REFACTOR - in case of failure we might have created a side effect (ie. temp staging table) which should be removed automatically
+    def upsert(self, files:List[str], rs_target_schema:str, rs_target_table:str, upsert_keys:List[str], drop_sort_key=False) -> None:
         """
-            Upserts from rs_stage into rs_target based on upsert_keys. 
+            ARGUMENTS
+                files: list of S3 URI'S
+                rs_target_schema: redshift target schema eg. 'ingest'
+                rs_target_table: redshift target table eg. 'cogenius_xxx'
+                upsert_keys: list of fields to match records between the source (ie. stage) and target, in order to identify which records already exist
+                drop_sort_key: optional, needs to be set to True in case target table has a sort key
+                            
+            RETURNS
+                None
+
+            ADDITIONAL INFO
+                List of upsert keys can be considered a composite key. If the composite key already exists within the target table, the associated record
+                will be deleted and replaced by the new record with the same composite key. 
         """
-        where_condition_target = ''
-        counter = 0
-        for col in upsert_keys:
-            if counter == 0:
-                line_target = f'{rs_target}.{col} = {rs_stage}.{col}'
-            else:
-                line_target = f'AND {rs_target}.{col} = {rs_stage}.{col}'
-            where_condition_target += str(line_target)
-            counter =+ 1
-        try:
-            self._query(f"""
-                    begin transaction;
+        stage_uuid = uuid.uuid4()
+        rs_target = f'{rs_target_schema}.{rs_target_table}'
+        rs_stage = f'{rs_target}_TEMP_{stage_uuid}' 
+        self._create_stage_like_target(rs_target, rs_stage, drop_sort_key=drop_sort_key)
+        self._copy_parquet_into_stage(files, rs_stage)
+        self._upsert(rs_target, rs_stage, upsert_keys)
+        return
 
-                    DELETE FROM {rs_target} 
-                    USING {rs_stage} 
-                    WHERE {where_condition_target} 
-                    ;
-                    
-                    INSERT INTO {rs_target}
-                    SELECT *
-                    FROM {rs_stage};
-
-                    DROP TABLE {rs_stage};
-                    end transaction;
-                """)
-            logging.info(f'UPSERT based on version succesfull for {rs_stage}')
-        except Exception as e:
-                logging.error('Issue UPSERTING stage into target. Exiting...')
-                logging.error(f'message: {e}', exc_info=True)
-                sys.exit(1)
-
-    def _upsert_version(self, rs_target, rs_stage, upsert_keys):
-        """
-            Upserts from rs_stage into rs_target based on upsert_keys and version. Use for lynx tables without datecreated/datemodified
-        """
-        where_condition_target = ''
-        counter = 0
-        for col in upsert_keys:
-            if counter == 0:
-                line_target = f'{rs_target}.{col} = {rs_stage}.{col}'
-            else:
-                line_target = f'AND {rs_target}.{col} = {rs_stage}.{col}'
-            where_condition_target += str(line_target)
-            counter =+ 1
-        try:
-            self._query(f"""
-                    begin transaction;
-
-                    DELETE FROM {rs_target} 
-                    USING {rs_stage} 
-                    WHERE {where_condition_target} 
-                    ;
-                    
-                    INSERT INTO {rs_target}
-                    SELECT *
-                    FROM {rs_stage};
-
-                    DROP TABLE {rs_stage};
-                    end transaction;
-                """)
-            logging.info(f'UPSERT based on version succesfull for {rs_stage}')
-        except Exception as e:
-                logging.error('Issue UPSERTING stage into target. Exiting...')
-                logging.error(f'message: {e}', exc_info=True)
-                sys.exit(1)
-    
     def _full_refresh(self, rs_target, rs_stage):
         """
             Deletes all data in target table followed by inserting all data from stage into target. 
@@ -237,65 +195,13 @@ class rsClient():
                 logging.error(f'message: {e}', exc_info=True)
                 sys.exit(1)
 
-    def upsert(self, files, rs_target_schema, rs_target_table, upsert_keys, lynx=True, version=False):
+    def full_refresh(self,files, rs_target_schema, rs_target_table, drop_sort_key=False):
         """
             ARGUMENTS
                 files: list of parquet files (eg. ['s3://bucket/folder/sub/file.parquet', ...])
                 rs_target_schema: redshift target schema (eg. 'ingest)
                 rs_target_table: redshift target table (eg. 'cogenius_xxx')
-                upsert_keys: list of fields to match records between the source (ie. stage) and target, in order to identify which records already exist
-                lynx: boolean if true, datecreated/datemodifed or version will be taken into account (depending on version argument). If false, only upsert keys are taken into account
-                            
-            RETURNS
-                None
-
-            ADDITIONAL INFO
-                List of upsert keys can be considered a composite key. If the composite key already exists within the target table, the associated record
-                will be deleted and replaced by the new record with the same composite key. 
-                Since and older partition can be reprocessed, an additional check is performed on datemodified. Only if the datemodified within the target is 
-                < than the datemodified within the partition we're upserting, the record will be deleted from the target
-        """
-        rs_target = f'{rs_target_schema}.{rs_target_table}'
-        rs_stage = f'{rs_target}_TEMP_STAGE'
-        self._create_stage_like_target(rs_target, rs_stage)
-        self._copy_parquet_into_stage(files, rs_stage)
-        if lynx: 
-            self._upsert(rs_target, rs_stage, upsert_keys)
-        else:
-            self._upsert_non_lynx(rs_target, rs_stage, upsert_keys)
-        return
-
-    # REFACTOR - add to def upsert() with version boolean (lynx=true, version=true)
-    def upsert_version(self, files, rs_target_schema, rs_target_table, upsert_keys):
-        """
-            ARGUMENTS
-                files: list of parquet files (eg. ['s3://bucket/folder/sub/file.parquet', ...])
-                rs_target_schema: redshift target schema (eg. 'ingest)
-                rs_target_table: redshift target table (eg. 'cogenius_xxx')
-                upsert_keys: list of fields to match records between the source (ie. stage) and target, in order to identify which records already exist
-                            
-            RETURNS
-                None
-
-            ADDITIONAL INFO
-                List of upsert keys can be considered a composite key. If the composite key already exists within the target table, the associated record
-                will be deleted and replaced by the new record with the same composite key. 
-                Since and older partition can be reprocessed, an additional check is performed on version. Only if the version within the target is 
-                < than the version within the partition we're upserting, the record will be deleted from the target
-        """
-        rs_target = f'{rs_target_schema}.{rs_target_table}'
-        rs_stage = f'{rs_target}_TEMP_STAGE'
-        self._create_stage_like_target(rs_target, rs_stage)
-        self._copy_parquet_into_stage(files, rs_stage)
-        self._upsert_version(rs_target, rs_stage, upsert_keys)
-        return
-
-    def full_refresh(self,files, rs_target_schema, rs_target_table):
-        """
-            ARGUMENTS
-                files: list of parquet files (eg. ['s3://bucket/folder/sub/file.parquet', ...])
-                rs_target_schema: redshift target schema (eg. 'ingest)
-                rs_target_table: redshift target table (eg. 'cogenius_xxx')
+                drop_sort_key: optional, needs to be set to True in case target table has a sort key
                             
             RETURNS
                 None
@@ -306,7 +212,7 @@ class rsClient():
         """
         rs_target = f'{rs_target_schema}.{rs_target_table}'
         rs_stage = f'{rs_target}_TEMP_STAGE'
-        self._create_stage_like_target(rs_target, rs_stage)
+        self._create_stage_like_target(rs_target, rs_stage, drop_sort_key=drop_sort_key)
         self._copy_parquet_into_stage(files, rs_stage)
         self._full_refresh(rs_target, rs_stage)
         return
@@ -317,7 +223,7 @@ class rsClient():
                 files: list of parquet files (eg. ['s3://bucket/folder/sub/file.parquet', ...])
                 rs_target_schema: redshift target schema (eg. 'ingest)
                 rs_target_table: redshift target table (eg. 'dnb_continual')
-                drop_sort_key: boolean, ensure True in case target table has a sort key on meta_loading_date_utc
+                drop_sort_key: optional, needs to be set to True in case target table has a sort key
                             
             RETURNS
                 None
@@ -373,7 +279,6 @@ class rsClient():
     def rs_to_df(self, dml):
         return pd.read_sql_query(dml, self.conn)
 
-    
     def rs_fetch_single_val(self, query):
         result = None
         with self.conn.cursor() as cur:
@@ -381,8 +286,6 @@ class rsClient():
             result = cur.fetchone()
             self.conn.commit()
         return result[0]
-
-    
 
     def rs_column_to_api_query_param_list(self, rs_source_schema:str, rs_source_table:str, rs_source_column:str, api_query_params:str):
         """
@@ -458,7 +361,6 @@ class rsClient():
                 break
             yield rows, cols
             
-
     def _df_to_parquet_s3(self, df:pd.DataFrame, s3_bucket: str, s3_prefix: str, file_name:str):
         parquet_buffer = BytesIO()
         df.to_parquet(parquet_buffer, index=False, allow_truncated_timestamps=True)
