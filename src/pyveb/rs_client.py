@@ -141,7 +141,7 @@ class rsClient():
                 List of upsert keys can be considered a composite key. If the composite key already exists within the target table, the associated record
                 will be deleted and replaced by the new record with the same composite key. 
         """
-        stage_uuid = uuid.uuid4()
+        stage_uuid = uuid.uuid4().replace('-','')
         rs_target = f'{rs_target_schema}.{rs_target_table}'
         rs_stage = f'{rs_target}_TEMP_{stage_uuid}' 
         self._create_stage_like_target(rs_target, rs_stage, drop_sort_key=drop_sort_key)
