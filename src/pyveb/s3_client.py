@@ -25,18 +25,21 @@ class s3Client():
         logging.info('Succesfully created bucket resource')
         return bucket
 
-    def list_files(self, s3_prefix:str, file_type:str, max_files=1000000000000) -> list:
+    def list_files(self, s3_prefix:str, file_type:str, max_files=1000000000000, list_empty_files=True) -> list:
         """
             ARGUMENTS
                 s3_prefix: folder/subfolder/
                 file_type: eg. csv, xlsx, parquet
                 max_files: optional, unless max_files is specified, all files are returned. 
+                list_empty_files: if False, files with size 0 are not listed
 
             RETURNS 
                 List of files from s3_prefix, filtering by type. Files are fetched per chunks of 1000. 
             
             ADDITIONAL INFO 
             Files are automatically unquoted and returned as full path ( ie. s3:://bucket/s3_prefix/filename.extension)
+            
+            List_empty_files kwarg is set to True by default to enable backwards compatibility. 
         """
         kwargs = {
             "Bucket": self.bucket_name,
@@ -54,7 +57,10 @@ class s3Client():
             response = self.client.list_objects_v2(**kwargs)
             truncated = response["IsTruncated"]
             if "Contents" in response:
-                files.extend(record["Key"] for record in response["Contents"])
+                if list_empty_files:
+                    files.extend(record["Key"] for record in response["Contents"])
+                else:
+                    files.extend(record["Key"] for record in response["Contents"] if record["Size"] > 0)
                 if truncated:
                     kwargs["ContinuationToken"] = response["NextContinuationToken"]
         files = files[:max_files]
@@ -233,6 +239,8 @@ class s3Client():
             logging.error(e)
             sys.exit(1)
         return file_stream
+
+
 
 class externalS3Client():
 
