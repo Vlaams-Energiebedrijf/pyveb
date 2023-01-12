@@ -6,24 +6,31 @@ import pyodbc
 from time import time
 from io import BytesIO
 import boto3
-import random
 from time import sleep
-
-"""
-    https://github.com/mkleehammer/pyodbc/wiki/Data-Types
-
-"""
+from custom_decorators import retry
 
 class lynxClient():
+    """
+        Class which creates a connection to SQL server based on connection details in ENV variables.
+        Connection and cursor objects are created on initialization with retry patterns. 
 
-    CONN_RETRIES = 3
-    BACKOFF_IN_SECONDS = 5
+        The connection object allows querying and several methods are available which all have retry mechanism built-in. Each method 
+        generates a cursor object which is closed after correct execution. Each method is automatically retried 3 times. 
 
-    def __init__(self):
+        It is advised to call 'close_connection' if you no longer need the class instance. 
+    """
+
+    def __init__(self) -> str:
+        self._connection_instance = None
+        self._connection_instance = self._connect()
+        logging.info('successfully created connection')
+
+    def _create_conn_string(self) -> str:
         """
-            At runtime, environment variables are injected via entrypoint.sh.
+            Function to create a connection string for SQL server
+            Environment variables are injected in the container environment via entrypoint.sh at runtime
             For local development, we fetch environment variables from local enviroment. Make sure they are set up. 
-            Lynx only has 1 environment, hence no need to pass ENV
+            Lynx only has 1 environment, hence no need to pass ENV.
         """
         try: 
             server_raw = os.environ['LYNX_SERVER']
@@ -37,45 +44,19 @@ class lynxClient():
             logging.error("Issue fetching lynx credentials from environment variables. Exiting...")
             logging.error(e)
             sys.exit(1)
+        connection_string = 'DRIVER={ODBC Driver 17 for SQL Server};SERVER=' + server + ';DATABASE=' + database + ';UID=' + username + ';PWD=' + password
+        return connection_string
 
-        # connect to lynx SQL server 
-        try: 
-            connection_string = 'DRIVER={ODBC Driver 17 for SQL Server};SERVER=' + server + ';DATABASE=' + database + ';UID=' + username + ';PWD=' + password
-            self.conn = self._connect(connection_string)
-            logging.info("Succesfully set up connection with Lynx SQL Server")
-        except Exception as e:
-            logging.error("Unable to establish connection with Lynx SQL Server. Exiting")
-            logging.error(e)
-            sys.exit(1)
-        return
+    @retry(retries=3, error="Error creating connection to SQL server")
+    def _connect(self, **kwargs) -> pyodbc.Connection:
+        return pyodbc.connect(self._create_conn_string())
 
-    def _connect(self,connection_string:str):
-        f"""
-            Connect to Lynx via pyodbc. Automatically retries {self.CONN_RETRIES} times with exponential backoff of {self.BACKOFF_IN_SECONDS}. 
-            Returns Connection or runtime error
-        """
-        # https://github.com/mkleehammer/pyodbc/wiki/Unicode
-        # conn.setdecoding(pyodbc.SQL_CHAR, encoding='latin1', to=str)
-        # conn.setencoding(str, encoding='latin1')
-        nbr_of_retries = 0
-        while True:
-            try:
-                return pyodbc.connect(connection_string)
-            except pyodbc.Error as ex:
-                if nbr_of_retries == int(self.CONN_RETRIES)-1:
-                    raise RuntimeError(f'Not able to establish connection with Lynx server after {self.CONN_RETRIES}') from ex
-                sleep_duration = (int(self.BACKOFF_IN_SECONDS) * 2 ** nbr_of_retries + random.uniform(0, 1))
-                sleep(sleep_duration)
-                nbr_of_retries += 1
-                try:
-                    sqlstate = ex.args[1]
-                    sqlstate = sqlstate.split(".")
-                    logging.warning('Issue connecting to Lynx server, trying again')
-                    logging.warning(sqlstate[-3])
-                except Exception:
-                    logging.warning('Issue connecting to Lynx server and error response cannot be parsed. Trying again')
-    
-    def query_to_list(self, query:str):
+    @retry(retries=3, error="Error creating cursor")
+    def _create_cursor(self, **kwargs) -> pyodbc.Cursor:
+        return self._connection_instance.cursor()
+
+    @retry(retries=3, error="Error executing query to list")
+    def query_to_list(self, query:str, **kwargs) :
         """
             fetchall() where all rows will be stored in memory
             returns 
@@ -83,7 +64,7 @@ class lynxClient():
                 columns list
                 dtypes list
         """
-        cursor = self.conn.cursor()
+        cursor = self._create_cursor()
         cursor.execute(query)
         rows = cursor.fetchall()
         # https://stackoverflow.com/questions/5504340/python-mysqldb-connection-close-vs-cursor-close
@@ -92,64 +73,67 @@ class lynxClient():
         cursor.close()
         return rows, columns, dtypes
 
-    def query_fetch_single_value(self, query: str) -> str:
+    @retry(retries=3, error="Error executing query_fetch_single_value")
+    def query_fetch_single_value(self, query: str, **kwargs) -> str:
         """
             grab a scalar, eg select max(x) from y
         """
-        cursor = self.conn.cursor()
+        cursor = self._create_cursor()
         cursor.execute(query)
         val = cursor.fetchval()
         cursor.close()
-        return val
+        return str(val)
 
-    def query_to_df(self, query:str) -> pd.DataFrame:
+    @retry(retries=3, error="Error executing query_to_df")
+    def query_to_df(self, query:str, **kwargs) -> pd.DataFrame:
         """
             fetchall() where all rows will be stored in memory
             returns pandas dataframe
         """
-        cursor = self.conn.cursor()
+        cursor = self._create_cursor()
         cursor.execute(query)
         rows = cursor.fetchall()
         columns = [column[0] for column in cursor.description]
         cursor.close()
         df = pd.DataFrame.from_records(rows, columns=columns)
+        logging.info(df)
         return df
 
-    def get_max_cursors(self) -> str:
-        cursor = self.conn.cursor()
+    @retry(retries=3, error="Error executing get_max_cursors ")
+    def _get_max_cursors(self, **kwargs) -> str:
+        cursor = self._create_cursor()
         nbr_cursors = cursor.getinfo(pyodbc.SQL_MAX_CONCURRENT_ACTIVITIES)
         return nbr_cursors
 
-    def cursor(self):
-        cursor = self.conn.cursor()
-        return cursor
-
-
-    def stream_to_s3_parquet(self, query:str, batch_size:int, s3_bucket:str, s3_prefix:str, s3_filename:str) -> None:
+    @retry(retries=3, error="Error executing stream_to_s3_parquet")
+    def stream_to_s3_parquet(self, query:str, batch_size:int, s3_bucket:str, s3_prefix:str, s3_filename:str, **kwargs) -> None:
         """
             Streams the results of a sql query to parquet files on s3 with 'batch_size' nbr of rows per file. 
             Output files have the following key:
                 {s3_bucket}{s3_prefix}{timestamp}_{filename}.parquet        
         """
+        if kwargs['attempt'] > 1:       # ensure idempotency in case of retry
+            s3 = boto3.resource('s3')
+            bucket = s3.Bucket(s3_bucket)
+            bucket.objects.filter(Prefix=s3_prefix).delete()
         for x in self._stream_results(query, batch_size):
             col_names = [column[0] for column in x[0].cursor_description]
             df = pd.DataFrame.from_records(x, columns=col_names)
             self._df_to_parquet_s3(df, s3_bucket, s3_prefix, s3_filename)
         return
-
-                
-    def _stream_results(self, query:str, batch_size: int):
-        cursor = self.conn.cursor()
-        iter = cursor.execute(query)
+         
+    def _stream_results(self, query:str, batch_size: int) -> None:
+        cursor = self._create_cursor()
+        cursor_iterator = cursor.execute(query)
         while True:
-            rows = iter.fetchmany(batch_size)
+            rows = cursor_iterator.fetchmany(batch_size)
             if not rows:
                 break
             yield rows
             # for row in rows:
             #     yield row
 
-    def _df_to_parquet_s3(self, df:pd.DataFrame, s3_bucket: str, s3_prefix: str, file_name:str):
+    def _df_to_parquet_s3(self, df:pd.DataFrame, s3_bucket: str, s3_prefix: str, file_name:str) -> None:
         parquet_buffer = BytesIO()
         df.to_parquet(parquet_buffer, index=False, allow_truncated_timestamps=True)
         s3 = boto3.resource('s3')
@@ -160,7 +144,10 @@ class lynxClient():
         del df
         return
     
-
+    def close_connection(self) -> None:
+        self._connection_instance.close()
+        logging.info("Closed connection to SQL server")
+        return
 
 
 
