@@ -7,7 +7,7 @@ from time import time
 from io import BytesIO
 import boto3
 from time import sleep
-from custom_decorators import retry
+from .custom_decorators import retry
 
 class lynxClient():
     """

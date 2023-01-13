@@ -25,13 +25,20 @@ def get_config():
     """
     caller_file = os.path.dirname(inspect.stack()[1].filename)
     try: 
+        path = os.path.join(caller_file, 'config.yml')
         with open(f'{caller_file}/config.yml') as file:
             config = yaml.load(file, Loader=yaml.FullLoader)
+
     except Exception:
-        with open(f'{caller_file}/../config.yml') as file:
+        path = os.path.join(caller_file, '..', 'config.yml')
+        with open(path) as file:
             config = yaml.load(file, Loader=yaml.FullLoader)
+
     config = dotdict(config)
     return config
+
+
+
 
 def create_partition_key(partition_date:str) -> str:
     """
