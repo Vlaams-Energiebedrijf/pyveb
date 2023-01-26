@@ -8,7 +8,7 @@ import sys
 from pyspark.sql import SparkSession
 from pyspark.sql import DataFrame as SparkDataFrame
 import pyspark.sql.functions as F
-import datetime
+from datetime import datetime, timezone
 from functools import reduce
 from pyspark.sql.functions import udf
 from typing import List, Dict
@@ -46,23 +46,31 @@ class sparkClient():
         return access_key, secret_key, session_token
 
     def _create_spark_session(self):
+        """
+           Create a spark session on a local cluster (ie. single node) using nbr_of_cores cores.
+
+           In case spark runs on AWS batch, we need to use temporary AWS credentials in order to read from 
+           S3. In case of local dev we can use default AWS profile. 
+        """
          # https://stackoverflow.com/questions/50891509/apache-spark-codegen-stage-grows-beyond-64-kb 
         nbr_cores = self._get_nbr_cores()
+
         try:
             if self.env == 'local':
-                logging.info('Building local spark session')
+                logging.info('Building spark session w ProfileCredentialsProvider for S3 access')
                 spark = SparkSession.builder.master(f"local[{nbr_cores}]") \
                             .appName(f'Spark_{self.s3_prefix}') \
                             .config('spark.sql.codegen.wholeStage', 'false') \
                             .config("spark.sql.session.timeZone", "UTC") \
+                            .config('spark.jars.packages', 'org.apache.hadoop:hadoop-aws:3.2.0')\
                             .config("spark.sql.legacy.parquet.datetimeRebaseModeInRead", "LEGACY") \
                             .config("fs.s3a.aws.credentials.provider","com.amazonaws.auth.profile.ProfileCredentialsProvider")\
-                            .config('spark.jars.packages', 'org.apache.hadoop:hadoop-aws:3.2.0')\
                             .getOrCreate()
+
             else:
                 access_key, secret_key, session_token = self._get_temp_batch_credentials()
                 # https://stackoverflow.com/questions/54223242/aws-access-s3-from-spark-using-iam-role?noredirect=1&lq=1
-                logging.info('Building cloud spark session')
+                logging.info('Building spark session w TemporaryAWSCredentialsProvider for S3 access')
                 spark = SparkSession.builder.master(f"local[{nbr_cores}]") \
                             .appName(f'Spark_{self.s3_prefix}') \
                             .config('spark.sql.codegen.wholeStage', 'false') \
@@ -74,10 +82,7 @@ class sparkClient():
                             .config('fs.s3a.secret.key', secret_key)\
                             .config('fs.s3a.session.token', session_token)\
                             .getOrCreate()  
-            #  config('spark.hadoop.fs.s3a.aws.credentials.provider', 'org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider')\
-            # .config("fs.s3a.aws.credentials.provider","com.amazonaws.auth.InstanceProfileCredentialsProvider")\
-            # "fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem"
-            # .config('spark.sql.parquet.filterPushdown', 'false') \
+
             spark.sparkContext.setLogLevel("ERROR")
             logging.info(f"Spark Session Spark_{self.s3_prefix} created")
         except Exception as e:
@@ -172,11 +177,13 @@ class sparkClient():
     def _unite_dfs(self, df1: SparkDataFrame, df2: SparkDataFrame) -> SparkDataFrame:
         return df1.unionByName(df2)
 
-    def add_metadata(self, df:SparkDataFrame) -> SparkDataFrame:
+    def add_metadata(self, df:SparkDataFrame, file_name = None ) -> SparkDataFrame:
+        if not file_name: file_name = F.input_file_name()
+        print(f'file_name {file_name}')
         try: 
-            df = df.withColumn('META_file_name', F.input_file_name()) \
-                        .withColumn('META_partition_date', F.lit(datetime.datetime.strptime(self.partition_date, "%Y-%m-%d"))) \
-                        .withColumn('META_processing_date_utc', F.lit(datetime.datetime.now(datetime.timezone.utc)))
+            df = df.withColumn('META_file_name', F.lit(file_name)) \
+                        .withColumn('META_partition_date', F.lit(datetime.strptime(self.partition_date, "%Y-%m-%d"))) \
+                        .withColumn('META_processing_date_utc', F.lit(datetime.now(timezone.utc)))
             logging.info("Succesfully added metadata")
         except Exception as e:
             logging.error("Issue adding metadata. Exiting...")
@@ -257,7 +264,7 @@ class sparkClient():
             date_format = '%Y-%m-%d %H:%M:%S'
             try:
                 # https://stackoverflow.com/questions/1841565/valueerror-invalid-literal-for-int-with-base-10 
-                res = datetime.datetime.strptime(x, date_format)
+                res = datetime.strptime(x, date_format)
             except AttributeError:
                 res = x
         return str(res)
@@ -347,6 +354,13 @@ class sparkClient():
             ]
         )
         return new_df
+
+    def pandas_df_to_spark_df(self, pandas_df: pd.DataFrame, schema=None) -> SparkDataFrame:
+        if schema:
+            df_spark = self.spark.createDataFrame(pandas_df, schema=schema)
+        else:
+            df_spark = self.spark.createDataFrame(pandas_df)
+        return df_spark
         
 
 
