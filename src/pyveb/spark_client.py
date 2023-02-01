@@ -361,6 +361,15 @@ class sparkClient():
         else:
             df_spark = self.spark.createDataFrame(pandas_df)
         return df_spark
+
+    def nan_to_null(self, df: SparkDataFrame) -> SparkDataFrame:
+        """
+            In case you have string columns with NaN strings ( eg after reading pd.read_csv) which you want 
+            to load as NULL in redshift, apply this function. 
+        """
+        for col in df.columns:
+            df_null = df.withColumn(col, F.when(F.col(col) == 'NaN', None).otherwise(F.col(col)))
+        return df_null
         
 
 
