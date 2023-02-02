@@ -368,8 +368,8 @@ class sparkClient():
             to load as NULL in redshift, apply this function. 
         """
         for col in df.columns:
-            df_null = df.withColumn(col, F.when(F.col(col) == 'NaN', None).otherwise(F.col(col)))
-        return df_null
+            df = df.withColumn(col, F.when(F.col(col) == 'NaN', None).otherwise(F.col(col)))
+        return df
         
 
 
