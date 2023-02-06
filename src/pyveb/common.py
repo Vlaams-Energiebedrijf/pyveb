@@ -6,6 +6,7 @@ import logging
 import sys
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 import psutil
+import argparse
 
 cores = psutil.cpu_count(logical = False)
 
@@ -36,9 +37,6 @@ def get_config():
 
     config = dotdict(config)
     return config
-
-
-
 
 def create_partition_key(partition_date:str) -> str:
     """
@@ -154,6 +152,7 @@ def multithreading_list(func, input_list, *args, max_workers=cores, **kwargs):
         future_to_x = {executor.submit(func, x, *args, **kwargs): x for x in input_list}
         for future in as_completed(future_to_x):
             x = future_to_x[future]
+            # If an exception was raised while executing the task, it will be re-raised when calling the result() function or can be accessed via the exception() function.
             try:
                 result = future.result()
                 results[x] = result
@@ -202,3 +201,48 @@ def multiprocessing(func, input_list, *args, max_workers=cores, **kwargs):
                 print('%r generated an exception: %s' % (x, exc))
     return results, errors
 
+
+def valid_date(x: str) -> bool:
+        """ 
+            Checks whether a string has date format %Y-%m-%d (ie. 2020-01-01). 
+            
+            Returns datetime object or raises a ValueError
+        """
+        try:
+            return datetime.strptime(x, "%Y-%m-%d")
+        except ValueError as e:
+            msg = "Not a valid date: {0!r}".format(x)
+            raise argparse.ArgumentTypeError(msg) from e
+
+def parse_args() -> dict:
+    """
+        Parses command line arguments and returns dictionary of arguments which can be accessed via dot notation
+
+        ARGUMENTS
+            '--env', '-e', default ='local', type = str, choices = ['local', 'dev', 'prd']
+            '--type', '-t', default = 'incremental', type = str, choices = ['event', 'incremental', 'full']
+            '--airflow_execution_date', '-d', default = '2020-01-01', type = valid_date
+            '--task', '-task', type = str, required=True
+            '--event_bucket', type=str
+            '--event_prefix', type=stR
+
+    """
+    # create parser
+    parser = argparse.ArgumentParser()
+
+    # add arguments
+    parser.add_argument('--env', '-e', default ='local', type = str, choices = ['local', 'dev', 'prd'])
+    parser.add_argument('--type', '-t', default = 'incremental', type = str, choices = ['event', 'incremental', 'full'])
+    parser.add_argument('--airflow_execution_date', '-d', default = '2020-01-01', type = valid_date)
+    parser.add_argument('--task', '-task', type = str, required=True)
+    parser.add_argument('--event_bucket', type=str )
+    parser.add_argument('--event_prefix', type=str)
+
+    # parse arguments
+    args = parser.parse_args()
+
+    # manual error handling
+    if args.type == 'event' and ( args.event_bucket is None or args.event_prefix is None ):
+        parser.error("In case pipeline_type = 'event', both event_bucket and event_prefix need to be included")
+
+    return args
