@@ -19,7 +19,7 @@ from pyspark.sql.functions import udf
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, BooleanType, TimestampType, DoubleType, DecimalType, ArrayType, BinaryType, LongType
 import boto3
 
-import s3_client
+from . import s3_client
 
 class sparkClient():
     """
