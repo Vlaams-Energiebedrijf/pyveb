@@ -370,7 +370,7 @@ class sparkClient():
         # partition_date = str(partition_date.date())
         try: 
             df = df.withColumn('META_file_name', F.lit(file_name)) \
-                        .withColumn('META_partition_date', partition_date) \
+                        .withColumn('META_partition_date', F.lit(partition_date)) \
                         .withColumn('META_processing_date_utc', F.lit(datetime.now(timezone.utc)))
             logging.info("Succesfully added metadata")
         except Exception as e:
