@@ -83,7 +83,7 @@ class sparkClient():
                             .getOrCreate()  
 
             spark.sparkContext.setLogLevel("ERROR")
-            logging.info(f"Spark Session Spark_{self.s3_prefix} created")
+            logging.info("Spark Session created")
         except Exception as e:
             logging.error("Issue creating Spark Session. Exiting...")
             logging.error(e)
