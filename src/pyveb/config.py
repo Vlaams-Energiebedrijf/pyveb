@@ -98,9 +98,19 @@ class Config():
         logging.error('Mandatory general section not found')
         sys.exit(1)
 
+    ## TO DO - add proper error handling in case env or task is not setup for a required attribute
     def _parse_source(self) -> dict:
         if self.file.source:
-            return self.file.source
+            dic = self.file.source
+            if dic.api.input.redshift.iam_role:
+                dic['api']['input']['redshift']['iam_role'] = getattr(dic.api.input.redshift.iam_role, self.env)
+            if dic.api.input.redshift.query:
+                dic['api']['input']['redshift']['query'] = getattr(dic.api.input.redshift.query, self.task)
+            if dic.api.endpoint.name:
+                dic['api']['endpoint']['name'] = getattr(dic.api.endpoint.name, self.task)
+            if dic.api.endpoint.type:
+                dic['api']['endpoint']['type'] = getattr(dic.api.endpoint.type, self.task)
+            return dic
         logging.error('Mandatory source section not found')
         sys.exit(1)
 
@@ -112,6 +122,17 @@ class Config():
 
     def _parse_target(self) -> dict:
         if self.file.target:
+            dic = self.file.target
+            if dic.redshift.iam_role:
+                dic['redshift']['iam_role'] = getattr(dic.redshift.iam_role, self.env)
+            if dic.redshift.schema:
+                dic['redshift']['schema'] = getattr(dic.redshift.schema, self.env)
+            if dic.redshift.table:
+                dic['redshift']['table']= getattr(dic.redshift.table, self.task)
+            if dic.redshift.insert_type:
+                dic['redshift']['insert_type']= getattr(dic.redshift.insert_type, self.task)
+            if dic.redshift.upsert_keys:
+                dic['redshift']['upsert_keys'] = getattr(dic.redshift.upsert_keys, self.task)
             return self.file.target
         logging.error('Mandatory target section not found')
         sys.exit(1)

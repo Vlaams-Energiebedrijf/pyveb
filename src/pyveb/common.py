@@ -7,6 +7,7 @@ import sys
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 import psutil
 import argparse
+from typing import Dict
 
 cores = psutil.cpu_count(logical = False)
 
@@ -201,7 +202,6 @@ def multiprocessing(func, input_list, *args, max_workers=cores, **kwargs):
                 print('%r generated an exception: %s' % (x, exc))
     return results, errors
 
-
 def valid_date(x: str) -> bool:
         """ 
             Checks whether a string has date format %Y-%m-%d (ie. 2020-01-01). 
@@ -214,7 +214,7 @@ def valid_date(x: str) -> bool:
             msg = "Not a valid date: {0!r}".format(x)
             raise argparse.ArgumentTypeError(msg) from e
 
-def parse_args() -> dict:
+def parse_args() -> Dict:
     """
         Parses command line arguments and returns dictionary of arguments which can be accessed via dot notation
 
