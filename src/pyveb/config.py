@@ -6,6 +6,26 @@ from attrdict import AttrDict   # https://pypi.org/project/attrdict/
 from pathlib import Path
 from datetime import datetime
 
+def search_upwards_for_file(filename):
+    """Search in the current directory and all directories above it 
+    for a file of a particular name.
+    Arguments:
+    ---------
+    filename :: string, the filename to look for.
+    Returns
+    -------
+    pathlib.Path, the location of the first file found or
+    None, if none was found
+    """
+    d = Path.cwd()
+    root = Path(d.root)
+    while d != root:
+        attempt = d / filename
+        if attempt.exists():
+            return attempt
+        d = d.parent
+    return None
+
 def create_partition_key(execution_date:datetime) -> str:
     """
         ARGUMENT
@@ -19,6 +39,7 @@ def create_partition_key(execution_date:datetime) -> str:
 class Config():
 
     CONFIG_NAME = 'config.yml'
+    CONFIG_PATH_AWS = f'/app/{CONFIG_NAME}'
     REQUIRED_GENERAL_KEYS = ['pipeline_name', 'pipeline_bucket', 'pipeline_type', 'prefix_logs', 'prefix_raw', 'prefix_processed', 'tasks']
 
     def __init__(self, **kwargs):
@@ -35,17 +56,19 @@ class Config():
         self.target = self._parse_target()
 
     def _read_config_yaml(self) -> dict:
-        caller_file = os.path.dirname(inspect.stack()[1].filename)
-        try: 
-            path = os.path.join(caller_file, 'config.yml')
-            with open(f'{caller_file}/config.yml') as file:
+        file_path = search_upwards_for_file(Config.CONFIG_NAME)
+        if not file_path:
+            try: 
+               file_path = Config.CONFIG_PATH_AWS
+            except Exception as e:
+                logging.error(f'Config file {Config.CONFIG_NAME} not found') 
+                sys.exit(1)
+        try:
+            with open(file_path) as file:
                 config = yaml.safe_load(file)
-
-        except Exception:
-            path = os.path.join(caller_file, '..', 'config.yml')
-            with open(path) as file:
-                config = yaml.safe_load(file)
-
+        except EnvironmentError:
+            logging.error('Issue loading config file')
+            
         return config
 
     def _parse_general(self) -> dict:
