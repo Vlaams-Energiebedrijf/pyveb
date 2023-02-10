@@ -1,32 +1,10 @@
-## Work in progess. New dynamic config parser 
 import yaml
-import sys
+import os
+import sys, inspect
 import logging
 from attrdict import AttrDict   # https://pypi.org/project/attrdict/
 from pathlib import Path
 from datetime import datetime
-
-def search_upwards_for_file(filename):
-    """Search in the current directory and all directories above it 
-    for a file of a particular name.
-
-    Arguments:
-    ---------
-    filename :: string, the filename to look for.
-
-    Returns
-    -------
-    pathlib.Path, the location of the first file found or
-    None, if none was found
-    """
-    d = Path.cwd()
-    root = Path(d.root)
-    while d != root:
-        attempt = d / filename
-        if attempt.exists():
-            return attempt
-        d = d.parent
-    return None
 
 def create_partition_key(execution_date:datetime) -> str:
     """
@@ -37,9 +15,6 @@ def create_partition_key(execution_date:datetime) -> str:
     month = '{:02d}'.format(execution_date.month)
     year = execution_date.year
     return f"year={year}/month={month}/day={day}/"
-
-
-##### TO DO - add input validation for sections source, transform and 
 
 class Config():
 
@@ -60,15 +35,17 @@ class Config():
         self.target = self._parse_target()
 
     def _read_config_yaml(self) -> dict:
-        file_path = search_upwards_for_file(Config.CONFIG_NAME)
-        if not file_path:
-           logging.error(f'Config file {Config.CONFIG_NAME} not found') 
-           sys.exit(1)
-        try:
-            with open(file_path) as file:
+        caller_file = os.path.dirname(inspect.stack()[1].filename)
+        try: 
+            path = os.path.join(caller_file, 'config.yml')
+            with open(f'{caller_file}/config.yml') as file:
                 config = yaml.safe_load(file)
-        except EnvironmentError:
-            logging.error('Issue loading config file')
+
+        except Exception:
+            path = os.path.join(caller_file, '..', 'config.yml')
+            with open(path) as file:
+                config = yaml.safe_load(file)
+
         return config
 
     def _parse_general(self) -> dict:
