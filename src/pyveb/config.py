@@ -77,6 +77,7 @@ class Config():
         """
         if self.file.general:
             dic = self.file.general
+            dic['prefix_env'] = getattr(dic.prefix_env, self.env) 
             
             # check of all required keys are set up in config, are <> null/empty and have correct type
             for i in Config.REQUIRED_GENERAL_KEYS:
@@ -91,7 +92,7 @@ class Config():
                 else: 
                     assert isinstance(dic[i], str), f"key general.{i} is not a str" 
             
-            dic['prefix_env'] = getattr(dic.prefix_env, self.env)   
+              
             # add additional 'calculated' fields to config 
             dic['partition_raw'] = f'{dic.prefix_env}/{dic.pipeline_name}/{self.pipeline_type}/{dic.prefix_raw}/{self.task}/{create_partition_key(self.airflow_execution_date)}'
             dic['partition_processed'] = f'{dic.prefix_env}/{dic.pipeline_name}/{self.pipeline_type}/{dic.prefix_processed}/{self.task}/{create_partition_key(self.airflow_execution_date)}'
