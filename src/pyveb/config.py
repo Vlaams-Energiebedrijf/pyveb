@@ -40,7 +40,7 @@ class Config():
 
     CONFIG_NAME = 'config.yml'
     CONFIG_PATH_AWS = f'/app/{CONFIG_NAME}'
-    REQUIRED_GENERAL_KEYS = ['pipeline_name', 'pipeline_bucket', 'pipeline_type', 'prefix_logs', 'prefix_raw', 'prefix_processed', 'tasks']
+    REQUIRED_GENERAL_KEYS = ['pipeline_name', 'pipeline_bucket', 'pipeline_type', 'prefix_env', 'prefix_logs', 'prefix_raw', 'prefix_processed', 'tasks']
 
     def __init__(self, **kwargs):
         self.env = kwargs.get('env')
@@ -76,25 +76,26 @@ class Config():
             General section is valid for all environments
         """
         if self.file.general:
-            d = self.file.general
-
+            dic = self.file.general
+            
             # check of all required keys are set up in config, are <> null/empty and have correct type
             for i in Config.REQUIRED_GENERAL_KEYS:
                 try:
-                    d[i]
+                    dic[i]
                 except KeyError as e:
                     logging.error(f'Key \'{i}\' not found in config.yml')
                 # print(i)
-                assert d[i], f"key general.{i} is empty or NULL"
+                assert dic[i], f"key general.{i} is empty or NULL"
                 if i in  ['tasks', 'pipeline_type']:
-                    assert isinstance(d[i], list), f"key general.{i} is not a list"
+                    assert isinstance(dic[i], list), f"key general.{i} is not a list"
                 else: 
-                    assert isinstance(d[i], str), f"key general.{i} is not a str"    
-
+                    assert isinstance(dic[i], str), f"key general.{i} is not a str" 
+            
+            dic['prefix_env'] = getattr(dic.prefix_env, self.env)   
             # add additional 'calculated' fields to config 
-            d['partition_raw'] = f'{self.env}/{d.pipeline_name}/{self.pipeline_type}/{d.prefix_raw}/{self.task}/{create_partition_key(self.airflow_execution_date)}'
-            d['partition_processed'] = f'{self.env}/{d.pipeline_name}/{self.pipeline_type}/{d.prefix_processed}/{self.task}/{create_partition_key(self.airflow_execution_date)}'
-            return d
+            dic['partition_raw'] = f'{dic.prefix_env}/{dic.pipeline_name}/{self.pipeline_type}/{dic.prefix_raw}/{self.task}/{create_partition_key(self.airflow_execution_date)}'
+            dic['partition_processed'] = f'{dic.prefix_env}/{dic.pipeline_name}/{self.pipeline_type}/{dic.prefix_processed}/{self.task}/{create_partition_key(self.airflow_execution_date)}'
+            return dic
         logging.error('Mandatory general section not found')
         sys.exit(1)
 
