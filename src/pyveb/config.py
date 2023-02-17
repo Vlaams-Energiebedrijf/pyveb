@@ -133,13 +133,19 @@ class Config():
         if self.file.transform:
             transform = self.file.transform
 
-            if transform.convert_float_to_int:
-                val = getattr(transform.convert_float_to_int, self.task, None)
-                transform['convert_float_to_int'] = list(val) if val else val   
-            if transform.convert_old_timestamps:
-                val = getattr(transform.convert_old_timestamps, self.task, None)
-                transform['convert_old_timestamps'] = list(val) if val else val
-
+            ## to refactor - we did quick fix here 
+            try: 
+                if transform.convert_float_to_int:
+                    val = getattr(transform.convert_float_to_int, self.task, None)
+                    transform['convert_float_to_int'] = list(val) if val else val   
+            except Exception:
+                ...
+            try:  
+                if transform.convert_old_timestamps:
+                    val = getattr(transform.convert_old_timestamps, self.task, None)
+                    transform['convert_old_timestamps'] = list(val) if val else val
+            except Exception:
+                ...
             return transform
         logging.error('Mandatory transform section not found')
         sys.exit(1)
