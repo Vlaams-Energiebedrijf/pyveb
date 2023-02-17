@@ -76,66 +76,93 @@ class Config():
             General section is valid for all environments
         """
         if self.file.general:
-            dic = self.file.general
-            dic['prefix_env'] = getattr(dic.prefix_env, self.env) 
+            general = self.file.general
+            general['prefix_env'] = getattr(general.prefix_env, self.env) 
             
             # check of all required keys are set up in config, are <> null/empty and have correct type
             for i in Config.REQUIRED_GENERAL_KEYS:
                 try:
-                    dic[i]
+                    general[i]
                 except KeyError as e:
                     logging.error(f'Key \'{i}\' not found in config.yml')
-                # print(i)
-                assert dic[i], f"key general.{i} is empty or NULL"
+                assert general[i], f"key general.{i} is empty or NULL"
                 if i in  ['tasks', 'pipeline_type']:
-                    assert isinstance(dic[i], list), f"key general.{i} is not a list"
+                    assert isinstance(general[i], list), f"key general.{i} is not a list"
                 else: 
-                    assert isinstance(dic[i], str), f"key general.{i} is not a str" 
-            
-              
+                    assert isinstance(general[i], str), f"key general.{i} is not a str" 
+        
             # add additional 'calculated' fields to config 
-            dic['partition_raw'] = f'{dic.prefix_env}/{dic.pipeline_name}/{self.pipeline_type}/{dic.prefix_raw}/{self.task}/{create_partition_key(self.airflow_execution_date)}'
-            dic['partition_processed'] = f'{dic.prefix_env}/{dic.pipeline_name}/{self.pipeline_type}/{dic.prefix_processed}/{self.task}/{create_partition_key(self.airflow_execution_date)}'
-            return dic
+            common_prefix = f'{general.prefix_env}/{general.pipeline_name}/{self.pipeline_type}'
+            general['partition_raw'] = f'{common_prefix}/{general.prefix_raw}/{self.task}/{create_partition_key(self.airflow_execution_date)}'
+            general['partition_processed'] = f'{common_prefix}/{general.prefix_processed}/{self.task}/{create_partition_key(self.airflow_execution_date)}'
+            general['logs'] = f'{general.prefix_logs}/{common_prefix}/{self.task}/{create_partition_key(self.airflow_execution_date)}{datetime.now()}.log'
+            return general
         logging.error('Mandatory general section not found')
         sys.exit(1)
 
-    ## TO DO - add proper error handling in case env or task is not setup for a required attribute
     def _parse_source(self) -> dict:
         if self.file.source:
-            dic = self.file.source
-            if dic.api.input.redshift.iam_role:
-                dic['api']['input']['redshift']['iam_role'] = getattr(dic.api.input.redshift.iam_role, self.env)
-            if dic.api.input.redshift.query:
-                dic['api']['input']['redshift']['query'] = getattr(dic.api.input.redshift.query, self.task)
-            if dic.api.endpoint.name:
-                dic['api']['endpoint']['name'] = getattr(dic.api.endpoint.name, self.task)
-            if dic.api.endpoint.type:
-                dic['api']['endpoint']['type'] = getattr(dic.api.endpoint.type, self.task)
-            return dic
+            src = self.file.source
+
+            #### source LYNX
+            if src.type == 'db' and src.name =='lynx':
+
+                # required fields
+                src['lynx']['schema'] = getattr(src.lynx.schema, self.env)
+                src['lynx']['table'] = getattr(src.lynx.table, self.task)
+                src['lynx']['extract_size'] = getattr(src.lynx.extract_size, self.task)
+
+            #### source API
+            if src.type == 'api':
+
+                # required fields
+                src['api']['endpoint']['name'] = getattr(src.api.endpoint.name, self.task)
+                src['api']['endpoint']['type'] = getattr(src.api.endpoint.type, self.task)
+
+                if src.api.input.type == 'db' and src.api.input.name =='redshift':
+
+                    # required fields
+                    src['api']['input']['redshift']['iam_role'] = getattr(src.api.input.redshift.iam_role, self.env)
+                    src['api']['input']['redshift']['query'] = getattr(src.api.input.redshift.query, self.task)
+
+            return src
         logging.error('Mandatory source section not found')
         sys.exit(1)
 
     def _parse_transform(self) -> dict:
         if self.file.transform:
-            return self.file.transform
+            transform = self.file.transform
+
+            if transform.convert_float_to_int:
+                val = getattr(transform.convert_float_to_int, self.task, None)
+                transform['convert_float_to_int'] = list(val) if val else val   
+            if transform.convert_old_timestamps:
+                val = getattr(transform.convert_old_timestamps, self.task, None)
+                transform['convert_old_timestamps'] = list(val) if val else val
+
+            return transform
         logging.error('Mandatory transform section not found')
         sys.exit(1)
 
-    def _parse_target(self) -> dict:
+    def _parse_target(self) -> dict:  # sourcery skip: extract-method
         if self.file.target:
-            dic = self.file.target
-            if dic.redshift.iam_role:
-                dic['redshift']['iam_role'] = getattr(dic.redshift.iam_role, self.env)
-            if dic.redshift.schema:
-                dic['redshift']['schema'] = getattr(dic.redshift.schema, self.env)
-            if dic.redshift.table:
-                dic['redshift']['table']= getattr(dic.redshift.table, self.task)
-            if dic.redshift.insert_type:
-                dic['redshift']['insert_type']= getattr(dic.redshift.insert_type, self.task)
-            if dic.redshift.upsert_keys:
-                dic['redshift']['upsert_keys'] = getattr(dic.redshift.upsert_keys, self.task)
-            return self.file.target
+            target = self.file.target
+            
+            #### Target Redshift
+            if target.type == 'db' and target.name == 'redshift':
+                
+                # required fields
+                target['redshift']['iam_role'] = getattr(target.redshift.iam_role, self.env)
+                target['redshift']['schema'] = getattr(target.redshift.schema, self.env)
+                target['redshift']['table']= getattr(target.redshift.table, self.task)
+                target['redshift']['insert_type']= getattr(target.redshift.insert_type, self.task)[self.pipeline_type]
+
+                if target.redshift.insert_type == 'upsert':   # in case of upsert task, upsert keys need to be specified
+                    target['redshift']['upsert_keys'] = list(getattr(target.redshift.upsert_keys, self.task))
+                else:
+                    target['redshift']['upsert_keys'] = None
+
+            return target
         logging.error('Mandatory target section not found')
         sys.exit(1)
 
