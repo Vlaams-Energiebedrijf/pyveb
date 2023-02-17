@@ -96,6 +96,16 @@ class sparkClient():
 
     ### read into spark df  ######################################################################################################################
     ##############################################################################################################################################
+    def read_parquet(self, bucket: str, prefix:str) -> SparkDataFrame:
+        """
+            Read a prefix containing parquet files into a df. 
+
+            In case of reading raw parquet files from lynx queries, apply enforce_schema since we stream lynx in parts. As a result, parquet files 
+            might have slightly different schemas. For example, columns which contain only nulls in one file but values in another
+        """
+        key = f's3a://{bucket}/{prefix}'
+        return self.spark.read.parquet(key)
+
     def read_single_csv_file(self, file:str, schema: Dict[str, StructField] = None, header: str = "true", delimiter: str = ";") -> SparkDataFrame:
         """
             file: complete s3 URI including s3://
@@ -380,12 +390,13 @@ class sparkClient():
         return df
 
     @staticmethod
-    def enforce_schema(df: SparkDataFrame, schema: Dict[str, StructField]) -> SparkDataFrame:    
+    def enforce_schema(df: SparkDataFrame, schema: Dict[str, StructField]) -> SparkDataFrame:  
         try:
-            new_df = df.select([F.col(c).cast(schema[c]).alias(c) for c in df.columns])
+            new_df = df.select([F.col(c).cast(schema[c].dataType).alias(c) for c in df.columns])
+            # new_df = df.select([F.col(c).cast(schema[c]).alias(c) for c in df.columns])
             logging.info("Succesfully applied schema")
         except Exception as e:
-            logging.error("Issue applying schema. Exiting...")
+            logging.error("Issue enforcing schema. Exiting...")
             logging.error(e)
             sys.exit(1)
         return new_df
