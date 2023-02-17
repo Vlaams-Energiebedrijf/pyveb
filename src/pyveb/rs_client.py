@@ -10,6 +10,7 @@ from typing import List
 import uuid
 
 class rsClient():
+
     def __init__(self, env, rs_iam_role):
         """
             When deploying, environment variables are injected depending on ENV via entrypoint.sh.
@@ -84,7 +85,77 @@ class rsClient():
                 sys.exit(1)
         logging.info('Succesfully loaded all files in temp staging table')
         return
+   
+    #### write to redshift #########################################################################################################################
+    ##############################################################################################################################################
     
+    def upsert(self, files:List[str], rs_target_schema:str, rs_target_table:str, upsert_keys:List[str], drop_sort_key=False, **kwargs) -> None:
+        """
+            ARGUMENTS
+                files: list of S3 URI'S
+                rs_target_schema: redshift target schema eg. 'ingest'
+                rs_target_table: redshift target table eg. 'cogenius_xxx'
+                upsert_keys: list of fields to match records between the source (ie. stage) and target, in order to identify which records already exist
+                drop_sort_key: optional, needs to be set to True in case target table has a sort key
+                            
+            RETURNS
+                None
+
+            ADDITIONAL INFO
+                List of upsert keys can be considered a composite key. If the composite key already exists within the target table, the associated record
+                will be deleted and replaced by the new record with the same composite key. 
+        """
+        stage_uuid = str(uuid.uuid4()).replace('-','')
+        rs_target = f'{rs_target_schema}.{rs_target_table}'
+        rs_stage = f'{rs_target}_TEMP_{stage_uuid}' 
+        self._create_stage_like_target(rs_target, rs_stage, drop_sort_key=drop_sort_key)
+        self._copy_parquet_into_stage(files, rs_stage)
+        self._upsert(rs_target, rs_stage, upsert_keys)
+        return
+
+    def full_refresh(self,files, rs_target_schema, rs_target_table, drop_sort_key=False, **kwargs):
+        """
+            ARGUMENTS
+                files: list of parquet files (eg. ['s3://bucket/folder/sub/file.parquet', ...])
+                rs_target_schema: redshift target schema (eg. 'ingest)
+                rs_target_table: redshift target table (eg. 'cogenius_xxx')
+                drop_sort_key: optional, needs to be set to True in case target table has a sort key
+                            
+            RETURNS
+                None
+
+            ADDITIONAL INFO
+                The target table will be truncated (ie we're using delete since truncate commits automatically)
+                and stage will be copied into target
+        """
+        rs_target = f'{rs_target_schema}.{rs_target_table}'
+        rs_stage = f'{rs_target}_TEMP_STAGE'
+        self._create_stage_like_target(rs_target, rs_stage, drop_sort_key=drop_sort_key)
+        self._copy_parquet_into_stage(files, rs_stage)
+        self._full_refresh(rs_target, rs_stage)
+        return
+
+    def append(self, files: list, rs_target_schema:str, rs_target_table:str, drop_sort_key:bool = False, **kwargs) -> None:
+        """
+            ARGUMENTS
+                files: list of parquet files (eg. ['s3://bucket/folder/sub/file.parquet', ...])
+                rs_target_schema: redshift target schema (eg. 'ingest)
+                rs_target_table: redshift target table (eg. 'dnb_continual')
+                drop_sort_key: optional, needs to be set to True in case target table has a sort key
+                            
+            RETURNS
+                None
+
+            ADDITIONAL INFO
+                Records will be appended via insert into
+        """
+        rs_target = f'{rs_target_schema}.{rs_target_table}'
+        rs_stage = f'{rs_target}_TEMP_STAGE'
+        self._create_stage_like_target(rs_target, rs_stage, drop_sort_key=drop_sort_key)
+        self._copy_parquet_into_stage(files, rs_stage)
+        self._append(rs_target, rs_stage)
+        return
+
     def _upsert(self, rs_target:str, rs_stage:str, upsert_keys:List[str]) -> None:
         """
             Upserts from rs_stage into rs_target table. 
@@ -123,31 +194,6 @@ class rsClient():
                 logging.error('Issue UPSERTING stage into target. Exiting...')
                 logging.error(f'message: {e}', exc_info=True)
                 sys.exit(1)
-
-    # TO REFACTOR - in case of failure we might have created a side effect (ie. temp staging table) which should be removed automatically
-    def upsert(self, files:List[str], rs_target_schema:str, rs_target_table:str, upsert_keys:List[str], drop_sort_key=False) -> None:
-        """
-            ARGUMENTS
-                files: list of S3 URI'S
-                rs_target_schema: redshift target schema eg. 'ingest'
-                rs_target_table: redshift target table eg. 'cogenius_xxx'
-                upsert_keys: list of fields to match records between the source (ie. stage) and target, in order to identify which records already exist
-                drop_sort_key: optional, needs to be set to True in case target table has a sort key
-                            
-            RETURNS
-                None
-
-            ADDITIONAL INFO
-                List of upsert keys can be considered a composite key. If the composite key already exists within the target table, the associated record
-                will be deleted and replaced by the new record with the same composite key. 
-        """
-        stage_uuid = str(uuid.uuid4()).replace('-','')
-        rs_target = f'{rs_target_schema}.{rs_target_table}'
-        rs_stage = f'{rs_target}_TEMP_{stage_uuid}' 
-        self._create_stage_like_target(rs_target, rs_stage, drop_sort_key=drop_sort_key)
-        self._copy_parquet_into_stage(files, rs_stage)
-        self._upsert(rs_target, rs_stage, upsert_keys)
-        return
 
     def _full_refresh(self, rs_target, rs_stage):
         """
@@ -195,51 +241,61 @@ class rsClient():
                 logging.error(f'message: {e}', exc_info=True)
                 sys.exit(1)
 
-    def full_refresh(self,files, rs_target_schema, rs_target_table, drop_sort_key=False):
-        """
-            ARGUMENTS
-                files: list of parquet files (eg. ['s3://bucket/folder/sub/file.parquet', ...])
-                rs_target_schema: redshift target schema (eg. 'ingest)
-                rs_target_table: redshift target table (eg. 'cogenius_xxx')
-                drop_sort_key: optional, needs to be set to True in case target table has a sort key
-                            
-            RETURNS
-                None
+    def insert(self, insert_type: str, files: List[str], target_schema: str, target_table: str, upsert_keys: List[str] = None, drop_sort_key=False ) -> None:
+        """ 
+            Insert a list of parquet files into redshift target_schema.target_table. 
 
-            ADDITIONAL INFO
-                The target table will be truncated (ie we're using delete since truncate commits automatically)
-                and stage will be copied into target
+            Insert options are append, overwrite and upsert.
+            In case a sort key exists on "meta_loading_date_utc" set drop_sort_key = True. 
+            In case of upsert, specify a list of upsert columns.
+
+            Files are copied file by file into a staging table which is a copy of the target table suffixed with _TEMP_{UUID}. 
+           
+            UPSERT
+            
+                1. deletes records in target if upsert key exists in stage
+                2. inserts stage into target
+                3. drops stage
+
+            APPEND
+
+                1. inserts all data from stage into target. 
+
+            OVERWRITE
+
+                1. deletes all data in target table 
+                2. inserts all data from stage into target. 
+
+            TO DO
+            
+            1. copy a prefix to stage instead of file by file in order to enable parallelization
+            2. refactor append, full_refresh, .. methods. Rename them 
+            3. drop sort key kwarg should be removed. We should automatically handle the scenario where there is a sort key on meta_loading_date
+
+
+            GOOD TO KNOW
+    
+            This is a 'new' method encapsulating the insert methods. For backward compatibility we retain the old function names and access then via an insert_map. 
+            Ideally these names should be changed and we should refactor so we can simply do:
+
+            insert = f"insert_{insert_type}"
+            if hasattr(self, insert) and callable(func := getattr(self, insert)):
+                return func(*args, **kwargs)
+
         """
-        rs_target = f'{rs_target_schema}.{rs_target_table}'
-        rs_stage = f'{rs_target}_TEMP_STAGE'
-        self._create_stage_like_target(rs_target, rs_stage, drop_sort_key=drop_sort_key)
-        self._copy_parquet_into_stage(files, rs_stage)
-        self._full_refresh(rs_target, rs_stage)
+        insert_map = {
+            'append': self.append,
+            'overwrite': self.full_refresh,
+            'upsert': self.upsert
+        }
+        insert_func = insert_map[insert_type]
+        insert_func(files, target_schema, target_table, upsert_keys=upsert_keys, drop_sort_key=drop_sort_key)
         return
 
-    def append(self, files: list, rs_target_schema:str, rs_target_table:str, drop_sort_key:bool = False) -> None:
-        """
-            ARGUMENTS
-                files: list of parquet files (eg. ['s3://bucket/folder/sub/file.parquet', ...])
-                rs_target_schema: redshift target schema (eg. 'ingest)
-                rs_target_table: redshift target table (eg. 'dnb_continual')
-                drop_sort_key: optional, needs to be set to True in case target table has a sort key
-                            
-            RETURNS
-                None
-
-            ADDITIONAL INFO
-                Records will be appended via insert into
-        """
-        rs_target = f'{rs_target_schema}.{rs_target_table}'
-        rs_stage = f'{rs_target}_TEMP_STAGE'
-        self._create_stage_like_target(rs_target, rs_stage, drop_sort_key=drop_sort_key)
-        self._copy_parquet_into_stage(files, rs_stage)
-        self._append(rs_target, rs_stage)
-        return
-
-     # Not tested yet
     def load_copy_csv(self, s3_bucket, s3_prefix, rs_target, iam_role, delimiter, columns=None, timeformat='YYYY-MM-DDTHH:MI:SS'):
+
+        # UNTESTEd
+
         # sourcery skip: none-compare
         """
             s3_bucket: bucket
@@ -275,6 +331,9 @@ class rsClient():
             """
         self._query(dml)
         return
+
+    #### read redshift  ##########################################################################################################################
+    ##############################################################################################################################################
 
     def rs_to_df(self, dml):
         return pd.read_sql_query(dml, self.conn)
