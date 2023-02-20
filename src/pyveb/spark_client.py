@@ -417,7 +417,7 @@ class sparkClient():
         return new_df
 
     @staticmethod
-    def clean_old_dates(self, df:SparkDataFrame, cols_to_clean:list) -> SparkDataFrame:
+    def clean_old_dates(df:SparkDataFrame, cols_to_clean:list) -> SparkDataFrame:
         """
             Spark 3.0 has difficulties working with dates older than 1900-01-01.
 
