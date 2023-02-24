@@ -27,17 +27,27 @@ class seleniumClient():
             Chrome options for headless browser is enabled.
             based on https://github.com/nazliander/scrape-nr-of-deaths-istanbul/blob/master/app.py
         """
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_prefs = {
-            'download.default_directory' :
-            './temp_data/'
+        # chrome_options = Options()
+        download_file_path = os.path.join(os.getcwd(), 'temp_data')
+        path_exists = os.path.exists(download_file_path)
+        if not path_exists:
+            os.makedirs(download_file_path)
+        options = webdriver.ChromeOptions()
+        options.add_argument("--headless=new")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        prefs = {
+            "download.default_directory": download_file_path,
         }
-        chrome_options.experimental_options["prefs"] = chrome_prefs
-        chrome_prefs["profile.default_content_settings"] = {"images": 2}
-        return chrome_options
+
+        options.add_experimental_option("prefs",prefs)
+
+        # chrome_prefs = {
+        #     "download": {"default_directory": "./temp_data"},
+        #     "profile.default_content_settings": {"images": 2},
+        # }
+        # chrome_options.add_experimental_option("prefs", chrome_prefs)
+        return options
 
     def _create_driver(self):
         logging.info("Creating chrome driver...")
@@ -130,6 +140,7 @@ class seleniumClient():
                 # safety wait
                 time.sleep(1)
                 button = self.driver.find_element(By.XPATH, selenium_xpath )
+                print(button)
                 button.click()
                 # REFACTOR - we need to wait before closing the driver, otherwise we end up with an incomplete crcdownload
                 # we should check in temp_data whether the filetype is csv
