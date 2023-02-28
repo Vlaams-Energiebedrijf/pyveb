@@ -49,6 +49,7 @@ class Config():
         self.task = kwargs.get('task')
         self.event_bucket = kwargs.get('event_bucket')
         self.event_prefix = kwargs.get('event_prefix')
+        self.year = kwargs.get('year')
         self.file = AttrDict(self._read_config_yaml())
         self.general = self._parse_general()
         self.source = self._parse_source()
@@ -92,7 +93,10 @@ class Config():
                     assert isinstance(general[i], str), f"key general.{i} is not a str" 
         
             # add additional 'calculated' fields to config 
-            common_prefix = f'{general.prefix_env}/{general.pipeline_name}/{self.pipeline_type}'
+            if self.year:
+                common_prefix = f'{general.prefix_env}/{general.pipeline_name}/{self.year}/{self.pipeline_type}'
+            else: 
+                common_prefix = f'{general.prefix_env}/{general.pipeline_name}/{self.pipeline_type}'
             general['partition_raw'] = f'{common_prefix}/{general.prefix_raw}/{self.task}/{create_partition_key(self.airflow_execution_date)}'
             general['partition_processed'] = f'{common_prefix}/{general.prefix_processed}/{self.task}/{create_partition_key(self.airflow_execution_date)}'
             general['logs'] = f'{general.prefix_logs}/{common_prefix}/{self.task}/{create_partition_key(self.airflow_execution_date)}{datetime.now()}.log'
