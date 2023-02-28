@@ -224,7 +224,10 @@ def parse_args() -> Dict:
             '--airflow_execution_date', '-d', default = '2020-01-01', type = valid_date
             '--task', '-task', type = str, required=True
             '--event_bucket', type=str
-            '--event_prefix', type=stR
+            '--event_prefix', type=str
+            '--year', type=str. In case we need to run a pipeline yearly, for example VLABEL process is a yearly process. Specify for which year you want to execute
+
+
 
     """
     # create parser
@@ -237,6 +240,7 @@ def parse_args() -> Dict:
     parser.add_argument('--task', '-task', type = str, required=True)
     parser.add_argument('--event_bucket', type=str )
     parser.add_argument('--event_prefix', type=str)
+    parser.add_argument('--year', type=int)
 
     # parse arguments
     args = parser.parse_args()
