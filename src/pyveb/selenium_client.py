@@ -140,7 +140,6 @@ class seleniumClient():
                 # safety wait
                 time.sleep(1)
                 button = self.driver.find_element(By.XPATH, selenium_xpath )
-                print(button)
                 button.click()
                 # REFACTOR - we need to wait before closing the driver, otherwise we end up with an incomplete crcdownload
                 # we should check in temp_data whether the filetype is csv
@@ -155,7 +154,27 @@ class seleniumClient():
                     sys.exit(1)
         logging.info('Succesfully retrieved file and stored in ./temp_data/')
         return
-      
+    
+
+    def get_href_via_xpath(self, xpath:str) -> None: 
+        for i in range(3):
+            time.sleep(i*i)
+            try:
+                self.driver.get(self.url)
+                time.sleep(1)
+                link = self.driver.find_element(By.XPATH, xpath)
+                self.driver.execute_script('arguments[0].click();', link)
+                break
+            except Exception as e:
+                if i<2:
+                    logging.warning(f'Issue downloading file, trying again: {e}')
+                    continue
+                if i == 2:
+                    logging.error('Cannot download file. Exiting..')
+                    sys.exit(1)
+        logging.info('Succesfully retrieved file and stored in ./temp_data/')
+        return
+
     def quit(self):
         self.driver.quit()
     
