@@ -125,12 +125,12 @@ class seleniumClient():
         logging.info(f'Succesfully retrieved file and stored here: {local_file}')
         return local_file
         
-    def get_file_via_form_button_xpath(self, selenium_xpath:str ):
+    def get_file_via_form_button_xpath(self, selenium_xpath:str, wait_time:int = 10) -> None:
         """
             ARGS: 
                 xpath: //form[@id='csvdownload']/button[1]
             
-            Donwloads file to temp_data and waits 10 seconds to complete download
+            Donwloads file to temp_data and waits 'wait_time' seconds to complete download
         """ 
         for i in range(3):
         # retry pattern with some back off
@@ -143,7 +143,7 @@ class seleniumClient():
                 button.click()
                 # REFACTOR - we need to wait before closing the driver, otherwise we end up with an incomplete crcdownload
                 # we should check in temp_data whether the filetype is csv
-                time.sleep(10)
+                time.sleep(wait_time)
                 break
             except Exception as e:
                 if i < 2:
@@ -156,7 +156,15 @@ class seleniumClient():
         return
     
 
-    def get_href_via_xpath(self, xpath:str) -> None: 
+    def get_href_via_xpath(self, xpath:str, wait_time:int = 10) -> None: 
+        """
+            Downloads file to temp_data and waits 'wait_time' seconds to complete download.
+
+            ARGS: 
+                xpath: //*[text()[contains(.,'SUBSTRING')]]
+            
+            Specify an xpath that returns a webelement containing a href attribute. The href link gets executed by execute_script function   
+        """ 
         for i in range(3):
             time.sleep(i*i)
             try:
@@ -164,6 +172,7 @@ class seleniumClient():
                 time.sleep(1)
                 link = self.driver.find_element(By.XPATH, xpath)
                 self.driver.execute_script('arguments[0].click();', link)
+                time.sleep(wait_time)
                 break
             except Exception as e:
                 if i<2:
