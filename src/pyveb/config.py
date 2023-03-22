@@ -94,7 +94,7 @@ class Config():
         
             # add additional 'calculated' fields to config 
             if self.year:
-                common_prefix = f'{general.prefix_env}/{general.pipeline_name}/{self.year}/{self.pipeline_type}'
+                common_prefix = f'{general.prefix_env}/{general.pipeline_name}/reporting_year={self.year}/{self.pipeline_type}'
             else: 
                 common_prefix = f'{general.prefix_env}/{general.pipeline_name}/{self.pipeline_type}'
             general['partition_raw'] = f'{common_prefix}/{general.prefix_raw}/{self.task}/{create_partition_key(self.airflow_execution_date)}'
