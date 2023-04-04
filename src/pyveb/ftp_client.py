@@ -47,6 +47,7 @@ class ftpClient():
     def _create_ftp_session(self):
         try:
             ftp_session = ftplib.FTP(self.url, timeout=self.timeout)
+            ftp_session.set_debuglevel(2)
             ftp_session.login(self.user, self.password)
             if self.ftp_folder:
                 ftp_session.cwd(self.ftp_folder)
@@ -69,4 +70,8 @@ class ftpClient():
             file_name = 'VEB_'+file.split('/')[-1]
         else:
             file_name = 'VEB_TEST_'+file.split('/')[-1]
-        self.ftp_session.storbinary(f'STOR {file_name}', memory_csv)
+        ftp_resp = self.ftp_session.storbinary(f'STOR {file_name}', memory_csv)
+        if str(ftp_resp) != "226 Transfer Complete":
+            logging.error(ftp_resp)
+        logging.info(ftp_resp)
+        return ftp_resp
