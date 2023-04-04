@@ -71,7 +71,7 @@ class ftpClient():
         else:
             file_name = 'VEB_TEST_'+file.split('/')[-1]
         ftp_resp = self.ftp_session.storbinary(f'STOR {file_name}', memory_csv)
-        if str(ftp_resp) != "226 Transfer Complete":
+        if str(ftp_resp.upper()) != "226 Transfer Complete".upper():
             logging.error(ftp_resp)
         logging.info(ftp_resp)
         return ftp_resp
