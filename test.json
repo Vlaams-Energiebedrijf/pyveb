@@ -1,0 +1,23 @@
+{
+    'CheckInComment': '', 
+    'CheckOutType': 2, 
+    'ContentTag': '{EC71F3B9-3CB2-4007-B6B0-E874F2BD1B7C},127,127', 
+    'CustomizedPageStatus': 0, 
+    'ETag': '"{EC71F3B9-3CB2-4007-B6B0-E874F2BD1B7C},127"', 
+    'Exists': True, 
+    'IrmEnabled': False, 
+    'Length': '9321888', 
+    'Level': 1, 
+    'LinkingUri': 'https://vlaamsenergiebedrijf.sharepoint.com/leveringen/Marktwerking/Facturatie/B%26O%20Facturatie/Allocatie%20NG%202023%20V1.xlsb?d=wec71f3b93cb24007b6b0e874f2bd1b7c', 
+    'LinkingUrl': 'https://vlaamsenergiebedrijf.sharepoint.com/leveringen/Marktwerking/Facturatie/B&O Facturatie/Allocatie NG 2023 V1.xlsb?d=wec71f3b93cb24007b6b0e874f2bd1b7c', 
+    'MajorVersion': 16, 
+    'MinorVersion': 0, 
+    'Name': 'Allocatie NG 2023 V1.xlsb', 
+    'ServerRelativeUrl': '/leveringen/Marktwerking/Facturatie/B&O Facturatie/Allocatie NG 2023 V1.xlsb', 
+    'TimeCreated': '2023-02-02T12:07:31Z', 
+    'TimeLastModified': '2023-03-28T14:13:49Z', 
+    'Title': '', 
+    'UIVersion': 8192, 
+    'UIVersionLabel': '16.0', 
+    UniqueId': 'ec71f3b9-3cb2-4007-b6b0-e874f2bd1b7c'
+}
