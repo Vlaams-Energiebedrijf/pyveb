@@ -113,7 +113,7 @@ class sharepointClient():
                         IF folder URL is https://vlaamsenergiebedrijf.sharepoint.com/leveringen/Marktwerking/Facturatie/Forms/Alle%20documenten.aspx?id=%2Fleveringen%2FMarktwerking%2FFacturatie%2FB%26O%20Facturatie&viewid=d82816a0%2D29b3%2D433d%2Db6de%2D9585c8984bd9
                         THEN folder_prefix = 'Facturatie/B&O Facturatie
 
-                - s3_prefix: folder/subfolder
+                - s3_prefix: folder/subfolder/
                 - s3_bucket: default veb-data-pipelines
         """
         files = self.list_files(sharepoint_folder_prefix)
@@ -124,7 +124,10 @@ class sharepointClient():
         bytes_file_obj.seek(0)
         s3 = s3Client(s3_bucket)
         file_name = file.name.replace(' ', '_')
-        key = f'{s3_prefix}/{file_name}'
+        if s3_prefix.endswith('/'):
+            key = f'{s3_prefix}{file_name}'
+        else:
+            key = f'{s3_prefix}/{file_name}'
         s3.client.put_object(Body=bytes_file_obj, Bucket=s3_bucket, Key=key)
         logging.info(f'Wrote {file.name} to {s3_bucket}/{s3_prefix}/{file_name}')
         return
