@@ -5,7 +5,7 @@ from time import sleep
 import logging
 import ast
 import sys, os
-from typing import Dict, List
+from typing import Dict, List, Optional
 import pandas as pd
 
 class basicAPI():
@@ -154,18 +154,26 @@ class CogeniusAPI():
 
 class basisregisterAPI():
 
-    def __init__(self, url, auth_type = 'api_key', **kwargs ):
+    API_VERSION_CONTENT_TYPE_MAP = {
+        'v1': 'application/json',
+        'v2': 'application/ld+json'
+    }
+
+    def __init__(self, url:str, api_version:str, auth_type: Optional[str] = 'api_key', **kwargs ) -> None:
+        """
+            Since the content_type has changed between version 1 and 2, one class instance can only serve endpoints for a given version
+        """
         if url.endswith("/"):
             None
         else:
             url = f'{url}/'
-        self.API_URL= url
+        self.API_URL= f'{url}{api_version}/'
         self.auth_type = auth_type
         self.api_key = kwargs.get('api_key')
         if self.auth_type == 'api_key':
             self.headers = {
                 'X-API-KEY' : self.api_key,
-                'Accept': 'application/json'
+                'Accept': basisregisterAPI.API_VERSION_CONTENT_TYPE_MAP[api_version]
             } 
         self.session = requests.Session()
         self.session.headers.update(self.headers)
@@ -210,7 +218,7 @@ class basisregisterAPI():
             except RuntimeError as e:
                 if x == int(retries)-1:
                     raise RuntimeError(
-                        f'No 200 response after {retries} tries for query: {json.loads(params)}'
+                        f'No 200 response after {retries} tries for query: {json.loads(params)}: {e}'
                     ) from e
                 sleep_duration = (int(backoff_in_seconds) * 2 ** x + random.uniform(0, 1))
                 sleep(sleep_duration)
