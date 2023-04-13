@@ -122,6 +122,7 @@ class Config():
                 # required fields
                 src['api']['endpoint']['name'] = getattr(src.api.endpoint.name, self.task)
                 src['api']['endpoint']['type'] = getattr(src.api.endpoint.type, self.task)
+                src['api']['endpoint']['version'] = getattr(src.api.endpoint.version, self.task)
 
                 if src.api.input.type == 'db' and src.api.input.name =='redshift':
 
