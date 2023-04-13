@@ -160,6 +160,9 @@ class basisregisterAPI():
     }
 
     def __init__(self, url:str, api_version:str, auth_type: Optional[str] = 'api_key', **kwargs ) -> None:
+        """
+            Since the content_type has changed between version 1 and 2, one class instance can only serve endpoints for a given version
+        """
         if url.endswith("/"):
             None
         else:
