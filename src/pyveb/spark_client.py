@@ -471,6 +471,8 @@ class sparkClient():
         """    
             Explodes a column which contain a list of items. The col type can either be a string '['a', 'b']' or an array.
 
+            We use explode_outer, otherwise rows with NULLs get dropped: https://spark.apache.org/docs/3.1.1/api/python/reference/api/pyspark.sql.functions.explode_outer.html
+
             Given df 
             +------+-------------+------+
             |  col1|         col2|  col3|
@@ -492,11 +494,11 @@ class sparkClient():
         temp_col_name = str(uuid.uuid4())
         if col_type == 'string':
             # https://stackoverflow.com/questions/57066797/pyspark-dataframe-split-column-with-multiple-values-into-rows
-            df = df.withColumn(temp_col_name, F.explode( F.split( F.regexp_extract( F.regexp_replace(F.col(explode_col), "\s", ""), "^\[(.*)\]$", 1), ",") ) )
+            df = df.withColumn(temp_col_name, F.explode_outer( F.split( F.regexp_extract( F.regexp_replace(F.col(explode_col), "\s", ""), "^\[(.*)\]$", 1), ",") ) )
             df = df.drop(explode_col)
             df = df.withColumnRenamed(temp_col_name, explode_col)
         if 'array' in col_type:
-            df = df.withColumn(temp_col_name, F.explode(explode_col))
+            df = df.withColumn(temp_col_name, F.explode_outer(explode_col))
             df = df.drop(explode_col)
             df = df.withColumnRenamed(temp_col_name, explode_col)
         return df
