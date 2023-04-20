@@ -461,7 +461,7 @@ class sparkClient():
         """
         temp_col_name = str(uuid.uuid4())
         # https://stackoverflow.com/questions/73293720/pyspark-filter-an-array-of-structs-based-on-one-value-in-the-struct
-        df = df.withColumn(temp_col_name, F.expr(f"filter({spark_array}, x -> x.{filter_field} is not null)")) 
+        df = df.withColumn(temp_col_name, F.expr(f"filter({spark_array}, x -> size(x.{filter_field}) > 0)")) 
         df = df.drop(spark_array)
         df = df.withColumnRenamed(temp_col_name, spark_array)
         return df
