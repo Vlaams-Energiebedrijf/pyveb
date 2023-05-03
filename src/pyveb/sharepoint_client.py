@@ -5,6 +5,7 @@ from office365.runtime.client_request_exception import ClientRequestException
 
 import os, io, logging, difflib, sys
 from datetime import datetime
+import time
 from dataclasses import dataclass
 from typing import List
 
@@ -100,9 +101,9 @@ class sharepointClient():
         return best_file[0]
 
     @retry(retries=3, error="Error download sharepoint file to s3")
-    def download_to_s3(self, sharepoint_folder_prefix, sharepoint_file_name, s3_prefix:str, s3_bucket: str ='veb-data-pipelines', **kwargs):
+    def download_to_s3(self, sharepoint_folder_prefix:str, sharepoint_file_name:str, s3_prefix:str, s3_bucket: str ='veb-data-pipelines', **kwargs) -> None:
         """
-            Downloads a sharepoint to the provided s3 prefix and bucket. 
+            Downloads a sharepoint file to the provided s3 prefix and bucket. 
 
             ARGUMENTS:
                 -sharepoint_folder_prefix:  
@@ -131,4 +132,48 @@ class sharepointClient():
         s3.client.put_object(Body=bytes_file_obj, Bucket=s3_bucket, Key=key)
         logging.info(f'Wrote {file.name} to {s3_bucket}/{s3_prefix}/{file_name}')
         return
+        
+    def upload_to_sharepoint(self, file, sharepoint_folder_prefix:str, file_name:str, file_extension:str, file_suffix_type:str =None, **kwargs) -> str:
+        """
+            Uploads a bytesobject or a local file to sharepoint. 
+
+            ARGUMENTS 
+                -sharepoint_folder_prefix:  
+                    e.g.
+                        IF folder URL is https://vlaamsenergiebedrijf.sharepoint.com/leveringen/Marktwerking/Facturatie/Forms/Alle%20documenten.aspx 
+                        THEN folder_prefix = 'Facturatie'
+
+                        IF folder URL is https://vlaamsenergiebedrijf.sharepoint.com/leveringen/Marktwerking/Facturatie/Forms/Alle%20documenten.aspx?id=%2Fleveringen%2FMarktwerking%2FFacturatie%2FB%26O%20Facturatie&viewid=d82816a0%2D29b3%2D433d%2Db6de%2D9585c8984bd9
+                        THEN folder_prefix = 'Facturatie/B&O Facturatie
+
+                        IF folder URL is https://vlaamsenergiebedrijf.sharepoint.com/data/Gedeelde%20%20documenten/Forms/AllItems.aspx?id=%2Fdata%2FGedeelde%20%20documenten%2Fwerkmap&viewid=e1053b37%2D7bf0%2D4709%2Db252%2D845a5a3773c4
+                        THEN folder_prefix = 'Gedeelde  documenten/werkmap'
+
+                - file_name: name of the object/file on sharepoint, eg. terra_extract
+                - file_extension: file extension, eg. .xlsx
+                - file_suffix_type: optional. Will add a dynamic suffix to the file name. eg current_date will add 2022_03_07 to the file name
+
+                ==> complete file_name will be: terra_extract_2020-03-07.xlsx
+
+            RETURNS
+                url of the file 
+
+        """
+        valid_suffixes = ['current_date', 'unix_timestamp', None]
+        if file_suffix_type not in valid_suffixes:
+            raise ValueError(f'Invalid file suffix provided in config. Accepted values are: {valid_suffixes}')
+        if file_suffix_type == 'current_date':
+            today = datetime.now()
+            formatted_date = today.strftime('%Y-%m-%d')
+            target_suffix = formatted_date
+        if file_suffix_type == 'unix_timestamp':
+            target_suffix = int(time.time())
+        if file_suffix_type:
+            target_name = f'{file_name}_{target_suffix}.{file_extension}'
+        else: 
+            target_name = f'{file_name}.{file_extension}'
+        target_folder = self.ctx.web.get_folder_by_server_relative_url(sharepoint_folder_prefix)
+        target_file = target_folder.upload_file(target_name, file).execute_query()
+        logging.info(f'Uploaded file to {target_file.serverRelativeUrl}')
+        return target_file.serverRelativeUrl
         
