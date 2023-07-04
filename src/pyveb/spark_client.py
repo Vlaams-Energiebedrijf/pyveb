@@ -439,9 +439,12 @@ class sparkClient():
         """
             In case you have string columns with NaN strings ( eg after reading pd.read_csv) which you want 
             to load as NULL in redshift, apply this function. 
+
+            Additionally, when a column only contains spaces, it is replaced by NULL. 
         """
         for col in df.columns:
             df = df.withColumn(col, F.when(F.col(col) == 'NaN', None).otherwise(F.col(col)))
+            df = df.withColumn(col, F.when(F.trim(F.col(col)) == '', None).otherwise(F.col(col)))
         return df
     
     @staticmethod
@@ -513,7 +516,17 @@ class sparkClient():
         return df
 
 
-            
+    @staticmethod
+    def rename_columns(df, columns):
+        """
+            rename multiple columns at once via a dict: {'old_name_1':'new_name_1', 'old_name_2':'new_name_2'}
+        
+        """        
+        if isinstance(columns, dict):
+            return df.select(*[F.col(col_name).alias(columns.get(col_name, col_name)) for col_name in df.columns])
+        else:
+            raise ValueError("'columns' should be a dict, like {'old_name_1':'new_name_1', 'old_name_2':'new_name_2'}")
+
 
 
 
