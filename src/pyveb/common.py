@@ -234,7 +234,7 @@ def parse_args() -> Dict:
     parser = argparse.ArgumentParser()
 
     # add arguments
-    parser.add_argument('--env', '-e', default ='local', type = str, choices = ['local', 'dev', 'prd'])
+    parser.add_argument('--env', '-e', default ='local', type = str, choices = ['local', 'dev', 'prd', 'stg'])
     parser.add_argument('--type', '-t', default = 'incremental', type = str, choices = ['event', 'incremental', 'full_refresh'])
     parser.add_argument('--airflow_execution_date', '-d', default = '2020-01-01', type = valid_date)
     parser.add_argument('--task', '-task', type = str, required=True)
