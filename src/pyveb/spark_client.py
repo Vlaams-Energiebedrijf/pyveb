@@ -34,8 +34,13 @@ class sparkClient():
         return None
 
     def _get_temp_batch_credentials(self ):
-        # we cannot fetch sts temp credentials via an assumed role, hence, we get the current credentials of the assumed role
+        # Wen we run from AWS batch, we're assuming a role. However, we cannot get temp credentials via an assumed role. 
+        # Hence, we hence we get the current credentials of the assumed role. In case we do not get a session token, most likely we're running 
+        # from long term credentials so we try to build a session via 'local'
         # https://stackoverflow.com/questions/36287720/boto3-get-credentials-dynamically
+        # https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html#configuring-credentials
+        # https://stackoverflow.com/questions/64808568/boto3-session-get-credentials-is-not-returning-token#:~:text=The%20cause%20is%20that%20you,or%20an%20EC2%20instance%20role.
+        # https://www.websitebuilderinsider.com/how-do-i-get-my-aws-session-token/
         session = boto3.Session()
         credentials = session.get_credentials()
         credentials = credentials.get_frozen_credentials()
@@ -53,9 +58,10 @@ class sparkClient():
         """
          # https://stackoverflow.com/questions/50891509/apache-spark-codegen-stage-grows-beyond-64-kb 
         nbr_cores = self._get_nbr_cores()
+        access_key, secret_key, session_token = self._get_temp_batch_credentials()
 
         try:
-            if self.env == 'local':
+            if self.env == 'local' or not session_token:
                 logging.info('Building spark session w ProfileCredentialsProvider for S3 access')
                 spark = SparkSession.builder.master(f"local[{nbr_cores}]") \
                             .appName(f'Spark_{str(uuid.uuid4())}') \
@@ -67,7 +73,6 @@ class sparkClient():
                             .getOrCreate()
 
             else:
-                access_key, secret_key, session_token = self._get_temp_batch_credentials()
                 # https://stackoverflow.com/questions/54223242/aws-access-s3-from-spark-using-iam-role?noredirect=1&lq=1
                 logging.info('Building spark session w TemporaryAWSCredentialsProvider for S3 access')
                 spark = SparkSession.builder.master(f"local[{nbr_cores}]") \
