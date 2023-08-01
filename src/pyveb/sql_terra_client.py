@@ -1,10 +1,9 @@
-
 import os, sys
 import pandas as pd
 import pyodbc
 import boto3
 import logging
-from time import time
+from time import time, sleep
 from io import BytesIO
 
 class sqlTerraClient():
@@ -40,25 +39,35 @@ class sqlTerraClient():
         """
         try:
             logging.info('Trying to fetch sql credentials from environment variables')
-            server_raw=os.environ['TERRA_HOST']
-            db=os.environ['TERRA_DB']
-            username=os.environ['TERRA_USERNAME']
+            self.server_raw=os.environ['TERRA_HOST']
+            self.db=os.environ['TERRA_DB']
+            self.username=os.environ['TERRA_USERNAME']
             password=os.environ['TERRA_PASSWORD'] 
         except Exception:
             logging.info('Trying to fetch ENV specific sql credentials from environment variables')
-            server_raw=os.environ[f'TERRA_HOST_{env.upper()}']
-            db=os.environ[f'TERRA_DB_{env.upper()}']
-            username=os.environ[f'TERRA_USERNAME_{env.upper()}']
+            self.server_raw=os.environ[f'TERRA_HOST_{env.upper()}']
+            self.db=os.environ[f'TERRA_DB_{env.upper()}']
+            self.username=os.environ[f'TERRA_USERNAME_{env.upper()}']
             password=os.environ[f'TERRA_PASSWORD_{env.upper()}'] 
-        server = f'{server_raw},{self.PORT}'
-        connection_string = 'DRIVER={ODBC Driver 17 for SQL Server};SERVER=' + server + ';DATABASE=' + db + ';UID=' + username + ';PWD=' + password
-        try:
-            logging.info('Trying to create a connection to DB')
-            self.conn = pyodbc.connect(connection_string, **kwargs)
-            logging.info('Succesfully creaeted DB connection')
-        except Exception as e:
-            logging.error(f'Issue creating connection: {e} .Exiting...')
-            sys.exit(1)
+        self.server = f'{self.server_raw},{self.PORT}'
+        connection_string = 'DRIVER={ODBC Driver 17 for SQL Server};SERVER=' + self.server + ';DATABASE=' + self.db + ';UID=' + self.username + ';PWD=' + password
+        
+        retries = 3
+        retry_delay = 1  # seconds
+
+        for attempt in range(retries + 1):
+            try:
+                logging.info('Trying to create a connection to DB')
+                self.conn = pyodbc.connect(connection_string, **kwargs)
+                logging.info('Succesfully creaeted DB connection')
+                break  # If successful, exit the loop
+            except pyodbc.Error as e:
+                print(f"Error connecting to the database: {e}")
+                if attempt < retries:
+                    sleep(retry_delay * (2 ** attempt))
+                else:
+                    print("Max retries reached. Exiting.")
+                    sys.exit(1)
         return 
     
     def call_stored_procedure(self, proc_statement:str): 
@@ -68,16 +77,30 @@ class sqlTerraClient():
             eg. proc_statement = '
         
         """
-        try:
-            cursor = self.conn.cursor()
-        except pyodbc.Error as e:
-            print("Error connecting to the database:", e)
+        retries = 3
+        retry_delay = 1  # seconds
+
+        for attempt in range(retries + 1):
+            try:
+                logging.info('Trying to create a connection to DB')
+                cursor = self.conn.cursor()
+                logging.info('Succesfully creaeted DB connection')
+                break  # If successful, exit the loop
+            except pyodbc.Error as e:
+                logging.warning(f"Error connecting to the database: {e}")
+                if attempt < retries:
+                    sleep(retry_delay * (2 ** attempt))
+                else:
+                    logging.error("Max retries reached. Exiting.")
+                    sys.exit(1)
+
         try:
             cursor.execute(proc_statement)
             print(f'Stored procedure {proc_statement} executed correctly')
             cursor.close()
         except pyodbc.Error as e:
             print("Error calling the stored procedure:", e)
+            raise e
 
     def query_to_df(self, query:str) -> pd.DataFrame:
         """
@@ -93,7 +116,6 @@ class sqlTerraClient():
         df = pd.DataFrame.from_records(rows, columns=columns)
         logging.info('Succesfully queried DB and returned as a pandas DF')
         return df
-
 
     def stream_to_s3_parquet(self, query:str, batch_size:int, s3_bucket:str, s3_prefix:str, s3_filename:str) -> None:
         """
