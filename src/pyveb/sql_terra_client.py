@@ -12,12 +12,31 @@ class sqlTerraClient():
     DRIVER = '{ODBC Driver 17 for SQL Server}'
     PORT = 1433
 
-    def __init__(self, env):
+    def __init__(self, env, **kwargs):
         """
-            When deploying, environment variables are injected depending on ENV via entrypoint.sh.
-            For local development, we fetch environemnt variables from local enviroment where we have variables for local, dev and prd, hence the except statement
+            Pass additional pyodbc arguments, eg auto_commit=true, as kwargs
 
-            ! since we don't have a local redshift cluster we load into redshift dev 
+            When running on AWS Batch, environment variables are injected via entrypoint.sh - TRY statement)
+            When developing locally, environment variables are injected via the shell env - EXCEPT statement
+            
+            You need to set up the following env variables in .zshr or similar: 
+
+                export TERRA_HOST_LOCAL='vo-ter-dev-rds-01.cspft74uddih.eu-west-1.rds.amazonaws.com'
+                export TERRA_USERNAME_LOCAL='TerraAdmin'
+                export TERRA_PASSWORD_LOCAL='
+                export TERRA_DB_LOCAL='Terra-dev'
+                export TERRA_HOST_DEV='vo-ter-dev-rds-01.cspft74uddih.eu-west-1.rds.amazonaws.com'
+                export TERRA_USERNAME_DEV='TerraAdmin'
+                export TERRA_PASSWORD_DEV=
+                export TERRA_DB_DEV='Terra-dev'
+                export TERRA_HOST_PRD='vo-ter-prd-rds-01.cspft74uddih.eu-west-1.rds.amazonaws.com'
+                export TERRA_USERNAME_PRD='TerraAdmin'
+                export TERRA_PASSWORD_PRD=
+                export TERRA_DB_PRD='Terra'
+                export TERRA_HOST_STG='vo-ter-stg-rds-01.cspft74uddih.eu-west-1.rds.amazonaws.com'
+                export TERRA_USERNAME_STG='TerraAdmin'
+                export TERRA_PASSWORD_STG=
+                export TERRA_DB_STG='Terra-stg'
         """
         try:
             logging.info('Trying to fetch sql credentials from environment variables')
@@ -35,12 +54,30 @@ class sqlTerraClient():
         connection_string = 'DRIVER={ODBC Driver 17 for SQL Server};SERVER=' + server + ';DATABASE=' + db + ';UID=' + username + ';PWD=' + password
         try:
             logging.info('Trying to create a connection to DB')
-            self.conn = pyodbc.connect(connection_string)
+            self.conn = pyodbc.connect(connection_string, **kwargs)
             logging.info('Succesfully creaeted DB connection')
         except Exception as e:
             logging.error(f'Issue creating connection: {e} .Exiting...')
             sys.exit(1)
         return 
+    
+    def call_stored_procedure(self, proc_statement:str): 
+        # sourcery skip: extract-method
+        """ 
+            ! ensure you instantiate a sqlTerraClient passing auto_commit=True kwarg
+            eg. proc_statement = '
+        
+        """
+        try:
+            cursor = self.conn.cursor()
+        except pyodbc.Error as e:
+            print("Error connecting to the database:", e)
+        try:
+            cursor.execute(proc_statement)
+            print(f'Stored procedure {proc_statement} executed correctly')
+            cursor.close()
+        except pyodbc.Error as e:
+            print("Error calling the stored procedure:", e)
 
     def query_to_df(self, query:str) -> pd.DataFrame:
         """
@@ -56,6 +93,7 @@ class sqlTerraClient():
         df = pd.DataFrame.from_records(rows, columns=columns)
         logging.info('Succesfully queried DB and returned as a pandas DF')
         return df
+
 
     def stream_to_s3_parquet(self, query:str, batch_size:int, s3_bucket:str, s3_prefix:str, s3_filename:str) -> None:
         """
