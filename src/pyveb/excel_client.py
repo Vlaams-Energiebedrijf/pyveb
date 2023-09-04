@@ -6,11 +6,12 @@ import logging
 
 class ExcelGenerator(ABC):
 
-    def __init__(self, file_name:str):
+    def __init__(self, file_name:str, **kwargs):
         self.file_name = file_name
-
+        self.save_as_read_only = kwargs.get('save_as_read_only', False)
+            
     @abstractmethod
-    def _generate_excel(self, file_name):
+    def _generate_excel(self, file_name, save_as_read_only):
         pass
 
     def generate(self) -> str:
@@ -22,21 +23,23 @@ class ExcelGenerator(ABC):
             os.mkdir(download_path)
         local_file = f"{download_path}{timestamp}_{self.file_name}"
         logging.warning(local_file)
-        self._generate_excel(local_file)
+        self._generate_excel(local_file, self.save_as_read_only)
         return local_file
 
 class DefaultExcel(ExcelGenerator):
 
-    def __init__(self, df:pd.DataFrame, file_name:str) -> None:
+    def __init__(self, df:pd.DataFrame, file_name:str, **kwargs) -> None:
         """
             Generates a default excel file from a pandas dataframe. 
 
-            Call the 'generate' method on the instance to generate the file and this method also returns the name of the local file holding the excel
+            Call the 'generate' method on the instance to generate a default excel file. The generate method returns the name of the local file holding the excel
+
+            Add 'save_as_read_only = True' kwarg to save the file in 'recommended read only mode'
         """
         self.df = df
-        super().__init__(file_name)
+        super().__init__(file_name, **kwargs)
 
-    def _generate_excel(self, file_name):
+    def _generate_excel(self, file_name, save_as_read_only):
         workbook = xlsxwriter.Workbook(file_name, {'nan_inf_to_errors': True})
         sheet = workbook.add_worksheet()
         header_row = 0
@@ -57,6 +60,8 @@ class DefaultExcel(ExcelGenerator):
                 if col == magic_num:
                     continue
                 sheet.write(row_idx + offset, col_idx, col)
+        if save_as_read_only:
+            workbook.read_only_recommended()
         workbook.close()
         return 
 
