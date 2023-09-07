@@ -7,6 +7,7 @@ import ast
 import sys, os
 from typing import Dict, List, Optional
 import pandas as pd
+from requests.exceptions import RequestException, HTTPError, Timeout
 
 class basicAPI():
 
@@ -98,60 +99,81 @@ class basicAPI():
         except Exception as e:
             logging.error("Error closing API session")
 
+class CogeniusAPI:
 
-class CogeniusAPI():
     def __init__(self, endpoint):
+        """
+            Instantiation create a session object to make HTTP requests to a specified cogenius endpoint. Once a CogeniusAPI object is created, we can call its fetch method
+            to make individual HTTP requests
+
+            See https://api-veb.lynx.energy/swagger/ui/index#!/ for available endpoints. Ensure that the endpoint prefix and API key are set up in your env. 
+
+        """
         try:
-            COGENIUS_API_KEY=os.environ[f'COGENIUS_API_KEY']
-            COGENIUS_API_ENDPOINT = os.environ[f'COGENIUS_API_ENDPOINT']
+            COGENIUS_API_KEY=os.environ['COGENIUS_API_KEY']
+            COGENIUS_API_ENDPOINT = os.environ['COGENIUS_API_ENDPOINT']
             logging.info("Found cogenius credentials in os.environ")
         except Exception as e:
             logging.error("No cogenius credentials found in os.environ. Exiting...")
             logging.error(e)
             sys.exit(1)
         self.endpoint_url = f'{COGENIUS_API_ENDPOINT}{endpoint}'
-        logging.info(self.endpoint_url)
+        logging.info(f'Using endpoing {self.endpoint_url}')
         self.headers = {
             'X-API-KEY' : COGENIUS_API_KEY,
             'Accept': 'application/json'
         } 
         self.session = requests.Session()
         self.session.headers.update(self.headers)
+        logging.info('Created requests session and updated Cogenius API KEY to headers')
         return 
 
-    def fetch(self, query, retries=3, backoff_in_seconds=1):
+    def fetch(self, query, retries=2, backoff_in_seconds=1, timeout=15):
         """
-            returns response_dictionary or a runtimeError
-            query: stringified dictionary, eg. '{'ean': 12345}'
+        Fetches from cogenius API endpoint specified during class instantiating. Request parameters are passed via query postional argument
+        which expects a stringified dictionary, eg. '{"ean": 12345}'. 
+
+        See https://api-veb.lynx.energy/swagger/ui/index#!/Preswitch/Preswitch_RequestPreSwitchBasic for API definitions
+
+        ARGUMENTS:
+            query: stringified dictionary, eg. '{"ean": 12345}'
+            retries = 2: optional, number of retries in case of api request failures
+            backoff_in_seconds = 1: optional, used to calculate waiting time between retries: (backoff_in_seconds * 2 ** (retry_attempt+1) + random.uniform(0, 1))
+            timeout = 15: individual api request will time out after timeout seconds 
+       
+        RETURNS: 
+            response.text object or a RunTimeError is raised in case all attempts fail
         """
-        x = 0
-        while True:
+        for x in range(retries+1):
             try:
-                return self._fetch(query)
-            except RuntimeError:
-                if x == int(retries)-1:
-                    raise RuntimeError(f'No 200 response after {retries} tries for query: {json.loads(query)}')
-                else:
-                    logging.warning(f'Trying again ... query: {json.loads(query)}')
-                    sleep_duration = (int(backoff_in_seconds) * 2 ** x + random.uniform(0, 1))
-                    sleep(sleep_duration)
-                    x += 1
+                return self._fetch(query, timeout)
+            except RuntimeError as runtime_error:
+                if x == retries - 1:
+                    # final attempt error is raised only. 
+                    # TO DO - put all intermediate errors and raise instead
+                    raise RuntimeError(f'Issue fetching: {json.loads(query)}: {runtime_error}') from runtime_error
+                sleep_duration = (backoff_in_seconds * 2 ** (x+1) + random.uniform(0, 1))
+                sleep(sleep_duration)
 
-    def _fetch(self, query):
-        response = self.session.get(self.endpoint_url, params = json.loads(query))
-        if response.status_code != 200:
-            raise RuntimeError(f' {response.status_code} response for {json.loads(query)}')
-        response_dict=json.loads(response.text)
-        return response_dict
-
+    def _fetch(self, query, timeout):
+        try:
+            response = self.session.get(self.endpoint_url, params=json.loads(query), timeout=timeout)
+            response.raise_for_status()  # Check if 2xx response returned
+            return json.loads(response.text)
+        except HTTPError as http_error:
+            raise RuntimeError(f'No response in 2xx range for {json.loads(query)}: {http_error}') from http_error
+        except Timeout as timeout_error:
+            raise RuntimeError(f'Request timed out for {json.loads(query)}: {timeout_error}') from timeout_error
+        except RequestException as request_error:
+            raise RuntimeError(f'Request Exception {json.loads(query)}: {request_error}') from request_error
+        
     def close_session(self):
         try:
             self.session.close()
             logging.info("Closed cogenius API session")
         except Exception as e:
             logging.error("Error closing cogenius session")
-        
-
+  
 class basisregisterAPI():
 
     API_VERSION_CONTENT_TYPE_MAP = {
