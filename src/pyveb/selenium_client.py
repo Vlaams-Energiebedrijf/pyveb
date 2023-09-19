@@ -1,4 +1,4 @@
-from selenium.webdriver.chrome.options import Options
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 import logging
@@ -6,6 +6,8 @@ import sys
 import os
 import time
 import urllib
+
+FILE_PATH = "/usr/local/bin/chromedriver"
 
 class seleniumClient():
 
@@ -27,7 +29,6 @@ class seleniumClient():
             Chrome options for headless browser is enabled.
             based on https://github.com/nazliander/scrape-nr-of-deaths-istanbul/blob/master/app.py
         """
-        # chrome_options = Options()
         download_file_path = os.path.join(os.getcwd(), 'temp_data')
         path_exists = os.path.exists(download_file_path)
         if not path_exists:
@@ -53,9 +54,29 @@ class seleniumClient():
         logging.info("Creating chrome driver...")
         try: 
             if self.env == 'local':
+            # https://stackoverflow.com/questions/76724939/there-is-no-such-driver-by-url-https-chromedriver-storage-googleapis-com-lates
+            # https://stackoverflow.com/questions/76727774/selenium-webdriver-chrome-115-stopped-working?rq=1
             # chrome iterates very quickly, hence chrome and chromedriver diverge. Hence, when running local, we can ensure match between both with below code
-                from webdriver_manager.chrome import ChromeDriverManager
-                driver = webdriver.Chrome(ChromeDriverManager().install(), options=self._set_chrome_options())
+                from selenium.webdriver.chrome.service import Service
+                import os
+            
+                try:
+                    service = Service()
+                    driver = webdriver.Chrome(service=service, options=self._set_chrome_options())
+                    logging.info("Succesfully created chrome driver")
+                # in case our chromedriver on PATH is outdated, we remove it from PATH and selenium manager should automatically install a correct version in ~/.cache/selenium
+                # if the automated upgrade in ~/.cache/selenium is not working, we have to force delete chromedriver from there as well ( not operational currently)
+                except Exception as e:
+                    logging.info(f"Chromedriver is outdated. Deleting and trying again. {e}")
+                    if os.path.exists(FILE_PATH):
+                        os.remove(FILE_PATH)
+                        logging.info(f"Chromedriver {FILE_PATH} deleted.")
+                        service = Service()
+                        driver = webdriver.Chrome(service=service, options=self._set_chrome_options())
+                        logging.info("Succesfully created chrome driver")
+                    else:
+                        logging.critical(f"Chromedriver {FILE_PATH} does not exist.")
+                        sys.exit(1) 
             else:
                 # driver and chrome are installed in docker image so we can use standard way of creating webdriver
                 driver = webdriver.Chrome(options=self._set_chrome_options())
@@ -189,5 +210,3 @@ class seleniumClient():
     
 
     
-
-  
