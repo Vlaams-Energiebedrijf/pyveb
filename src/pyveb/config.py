@@ -18,12 +18,16 @@ def search_upwards_for_file(filename):
     None, if none was found
     """
     d = Path.cwd()
+    logging.info(f'Current Directory: {d}')
     root = Path(d.root)
+    logging.info(f'Root: {root}')
     src_path = d / 'src' / filename
+    logging.info(f'Looking in {src_path}')
     if src_path.exists():
         return src_path
     while d != root:
         attempt = d / filename
+        logging.info(f'Looking in {attempt}')
         if attempt.exists():
             return attempt
         d = d.parent
