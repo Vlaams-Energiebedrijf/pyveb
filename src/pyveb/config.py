@@ -66,11 +66,11 @@ class Config():
                 sys.exit(1)
         try:
             with open(file_path) as file:
-                config = yaml.safe_load(file)
+                my_config = yaml.safe_load(file)
         except EnvironmentError:
             logging.error('Issue loading config file')
             
-        return config
+        return my_config
 
     def _parse_general(self) -> dict:
         """
