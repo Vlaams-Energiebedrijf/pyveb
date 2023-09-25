@@ -64,12 +64,13 @@ class Config():
             except Exception as e:
                 logging.error(f'Config file {Config.CONFIG_NAME} not found') 
                 sys.exit(1)
+        my_config = {}  
         try:
             with open(file_path) as file:
                 my_config = yaml.safe_load(file)
-        except EnvironmentError:
-            logging.error('Issue loading config file')
-            
+        except Exception as e:
+            logging.error(f'Issue loading config file. {e} Exiting... ')
+            sys.exit(1)
         return my_config
 
     def _parse_general(self) -> dict:
