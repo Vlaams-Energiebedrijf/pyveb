@@ -19,6 +19,9 @@ def search_upwards_for_file(filename):
     """
     d = Path.cwd()
     root = Path(d.root)
+    src_path = d / 'src' / filename
+    if src_path.exists():
+        return src_path
     while d != root:
         attempt = d / filename
         if attempt.exists():
@@ -68,10 +71,11 @@ class Config():
         try:
             with open(file_path) as file:
                 my_config = yaml.safe_load(file)
+                return my_config
         except Exception as e:
             logging.error(f'Issue loading config file. {e} Exiting... ')
             sys.exit(1)
-        return my_config
+        
 
     def _parse_general(self) -> dict:
         """
