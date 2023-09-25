@@ -57,12 +57,12 @@ class Config():
         self.target = self._parse_target()
 
     def _read_config_yaml(self) -> dict:
-        file_path = search_upwards_for_file(Config.CONFIG_NAME)
+        file_path = search_upwards_for_file(self.CONFIG_NAME)
         if not file_path:
             try: 
-               file_path = Config.CONFIG_PATH_AWS
+               file_path = self.CONFIG_PATH_AWS
             except Exception as e:
-                logging.error(f'Config file {Config.CONFIG_NAME} not found') 
+                logging.error(f'Config file {self.CONFIG_NAME} not found') 
                 sys.exit(1)
         my_config = {}  
         try:
