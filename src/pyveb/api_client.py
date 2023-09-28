@@ -247,17 +247,34 @@ class basisregisterAPI():
                 x += 1
 
     def _fetch(self, params: str, endpoint:str, fetch_type:str, **kwargs) -> Dict:
+
+        item_dict = json.loads(params)
+
+        # Split the dictionary into two based on key prefixes
+        api_params_dic = {k: v for k, v in item_dict.items() if not k.startswith('fk_')}
+        fk_params_dic = {k: v for k, v in item_dict.items() if k.startswith('fk_')}
+
+        # Convert the two parts back to JSON-formatted strings
+        api_params = json.dumps(api_params_dic, ensure_ascii=False)
+        fk_params = json.dumps(fk_params_dic, ensure_ascii=False)
+
         if fetch_type == 'query':
             url_endpoint = f'{self.API_URL}{endpoint}'
-            res = self.session.get(url_endpoint, params = json.loads(params))
+            res = self.session.get(url_endpoint, params = json.loads(api_params))
         if fetch_type == 'path':
-            params_suffix = '/'.join(list(ast.literal_eval(params).values()))
+            params_suffix = '/'.join(list(ast.literal_eval(api_params).values()))
             url_endpoint = f'{self.API_URL}{endpoint}/{params_suffix}'
             res = self.session.get(url_endpoint)
         res_dic=json.loads(res.text)
-        d = ast.literal_eval(params)
+        d = ast.literal_eval(api_params)
         for k,v in d.items():
             res_dic[f'api_param_{k}'] = v
+
+        if fk_params:
+            e = ast.literal_eval(fk_params)
+            for k,v in e.items():
+                res_dic[k] = v
+
         if res.status_code != 200:
             raise RuntimeError(f' {res.status_code} response for API call with {fetch_type} parameters: {json.loads(params)}')
         return res_dic
