@@ -156,6 +156,75 @@ class rsClient():
         self._append(rs_target, rs_stage)
         return
 
+
+    ### TO DO
+    def upsert_on_condition(self, rs_target: str, rs_stage: str, upsert_keys: List[str]) -> None:
+        """
+        Upserts or inserts from rs_stage into rs_target table.
+
+        1. Inserts records from stage into target if upsert key does not exist in target.
+        2. Updates records in target if upsert key exists in target and values are different.
+        """
+        # Create a list of conditions for upsert_keys
+        conditions = [f"{rs_target}.{col} = {rs_stage}.{col}" for col in upsert_keys]
+        
+        try:
+            # Build the WHERE condition by joining conditions with 'AND'
+            where_condition_target = " AND ".join(conditions)
+            
+            # Construct the SQL statement for the insert part
+            insert_sql = f"""
+                INSERT INTO {rs_target}
+                SELECT *
+                FROM {rs_stage}
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM {rs_target}
+                    WHERE {where_condition_target}
+                );
+            """
+            
+            # Construct the SQL statement for the update part
+            update_sql = f"""
+                UPDATE {rs_target}
+                SET (
+                    -- set column_name = new_value
+                    -- repeat for each column you want to update
+                )
+                FROM {rs_stage}
+                WHERE {where_condition_target}
+                    -- Add additional conditions to check if values are different
+                    -- e.g., {rs_target}.column_name != {rs_stage}.column_name
+            """
+            
+            # Combine the insert and update statements
+            sql_statement = f"""
+                BEGIN TRANSACTION;
+
+                -- Insert records from stage into target
+                {insert_sql}
+
+                -- Update records in target
+                {update_sql}
+
+                END TRANSACTION;
+            """
+            
+            # Execute the SQL statement
+            self._query(sql_statement)
+            
+            logging.info(f'UPSERT or INSERT successful for {rs_stage}')
+        except Exception as e:
+            logging.error('Issue UPSERTING or INSERTING stage into target. Exiting...')
+            logging.error(f'message: {e}', exc_info=True)
+            sys.exit(1)
+
+    ### TO DO
+    def _upsert_on_condition(self):
+        pass
+
+    ## TO DO: add to insert function
+
     def _upsert(self, rs_target:str, rs_stage:str, upsert_keys:List[str]) -> None:
         """
             Upserts from rs_stage into rs_target table. 
