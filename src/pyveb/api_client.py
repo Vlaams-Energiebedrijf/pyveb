@@ -219,7 +219,9 @@ class basisregisterAPI():
 
         """
         # we transform df to list of json dictionaries and remove keys if value is None
-        api_params = [json.dumps({k: v for k, v in rec.items() if v is not None}) for rec in df.to_dict('records')]   
+        # api_params = [json.dumps({k: v for k, v in rec.items() if v is not None}) for rec in df.to_dict('records')]   
+        api_params = [json.dumps({k: v for k, v in rec.items()}) for rec in df.to_dict('records')]   
+
         return api_params
 
     def fetch(self, params: str, endpoint:str , fetch_type: str, retries=3, backoff_in_seconds=1, **kwargs) -> Dict:
@@ -247,15 +249,20 @@ class basisregisterAPI():
                 x += 1
 
     def _fetch(self, params: str, endpoint:str, fetch_type:str, **kwargs) -> Dict:
+        """
+            params passed prefixed with fk_ will not be part of the api query but will be added to result dictionary. This way,
+            the input query and response can be linked via fk_ identifiers
+        """
 
         item_dict = json.loads(params)
-
-        # Split the dictionary into two based on key prefixes
-        api_params_dic = {k: v for k, v in item_dict.items() if not k.startswith('fk_')}
+        api_params_dic = {k: v for k, v in item_dict.items() if not k.startswith('fk_') and v is not None}
+        api_params_nulls_dic = {k: v for k, v in item_dict.items() if not k.startswith('fk_') and v is None}
         fk_params_dic = {k: v for k, v in item_dict.items() if k.startswith('fk_')}
 
         # Convert the two parts back to JSON-formatted strings
         api_params = json.dumps(api_params_dic, ensure_ascii=False)
+        # logging.error(api_params)
+        api_params_nulls = json.dumps(api_params_nulls_dic, ensure_ascii=False)
         fk_params = json.dumps(fk_params_dic, ensure_ascii=False)
 
         if fetch_type == 'query':
@@ -266,14 +273,21 @@ class basisregisterAPI():
             url_endpoint = f'{self.API_URL}{endpoint}/{params_suffix}'
             res = self.session.get(url_endpoint)
         res_dic=json.loads(res.text)
-        d = ast.literal_eval(api_params)
-        for k,v in d.items():
+        res_dic_lit = ast.literal_eval(api_params)
+
+        for k,v in res_dic_lit.items():
             res_dic[f'api_param_{k}'] = v
 
         if fk_params:
             e = ast.literal_eval(fk_params)
             for k,v in e.items():
                 res_dic[k] = v
+
+        if api_params_nulls:
+            a = api_params_nulls.replace("null", "None")
+            f = ast.literal_eval(a)
+            for k,v in f.items():
+                res_dic[f'api_param_{k}'] = v
 
         if res.status_code != 200:
             raise RuntimeError(f' {res.status_code} response for API call with {fetch_type} parameters: {json.loads(params)}')
