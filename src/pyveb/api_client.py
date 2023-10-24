@@ -224,7 +224,7 @@ class basisregisterAPI():
 
         return api_params
 
-    def fetch(self, params: str, endpoint:str , fetch_type: str, retries=3, backoff_in_seconds=1, **kwargs) -> Dict:
+    def fetch(self, params: str, endpoint:str , fetch_type: str, request_timeout = 3, retries=3, backoff_in_seconds=1, **kwargs) -> Dict:
         """
             ARGUMENTS
                 params: json string of params, eg. '{'param1': 12345, 'param2': 'abc'}' 
@@ -238,7 +238,7 @@ class basisregisterAPI():
         x = 0
         while True:
             try:
-                return self._fetch(params, endpoint, fetch_type, **kwargs)
+                return self._fetch(params, endpoint, fetch_type, request_timeout, **kwargs)
             except RuntimeError as e:
                 if x == int(retries)-1:
                     raise RuntimeError(
@@ -248,7 +248,7 @@ class basisregisterAPI():
                 sleep(sleep_duration)
                 x += 1
 
-    def _fetch(self, params: str, endpoint:str, fetch_type:str, **kwargs) -> Dict:
+    def _fetch(self, params: str, endpoint:str, fetch_type:str, request_timeout: int, **kwargs) -> Dict:
         """
             params passed prefixed with fk_ will not be part of the api query but will be added to result dictionary. This way,
             the input query and response can be linked via fk_ identifiers
@@ -261,20 +261,27 @@ class basisregisterAPI():
 
         # Convert the two parts back to JSON-formatted strings
         api_params = json.dumps(api_params_dic, ensure_ascii=False)
-        # logging.error(api_params)
         api_params_nulls = json.dumps(api_params_nulls_dic, ensure_ascii=False)
         fk_params = json.dumps(fk_params_dic, ensure_ascii=False)
 
-        if fetch_type == 'query':
-            url_endpoint = f'{self.API_URL}{endpoint}'
-            res = self.session.get(url_endpoint, params = json.loads(api_params))
-        if fetch_type == 'path':
-            params_suffix = '/'.join(list(ast.literal_eval(api_params).values()))
-            url_endpoint = f'{self.API_URL}{endpoint}/{params_suffix}'
-            res = self.session.get(url_endpoint)
+        try: 
+            if fetch_type == 'query':
+                url_endpoint = f'{self.API_URL}{endpoint}'
+                res = self.session.get(url_endpoint, params = json.loads(api_params), timeout=request_timeout)
+            if fetch_type == 'path':
+                params_suffix = '/'.join(list(ast.literal_eval(api_params).values()))
+                url_endpoint = f'{self.API_URL}{endpoint}/{params_suffix}'
+                res = self.session.get(url_endpoint, timeout=request_timeout)
+        ## handle timeouts
+        except requests.exceptions.Timeout as e:
+            raise RuntimeError(f' No response received within {request_timeout} second, request cancelled client-side for: {json.loads(params)}')
+        
+        ## handle unsuccesful responses
+        if res.status_code != 200:
+            raise RuntimeError(f' {res.status_code} response for API call with {fetch_type} parameters: {json.loads(params)}')
+        
         res_dic=json.loads(res.text)
         res_dic_lit = ast.literal_eval(api_params)
-
         for k,v in res_dic_lit.items():
             res_dic[f'api_param_{k}'] = v
 
@@ -289,8 +296,7 @@ class basisregisterAPI():
             for k,v in f.items():
                 res_dic[f'api_param_{k}'] = v
 
-        if res.status_code != 200:
-            raise RuntimeError(f' {res.status_code} response for API call with {fetch_type} parameters: {json.loads(params)}')
+       
         return res_dic
 
     def close_session(self):
