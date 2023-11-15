@@ -236,9 +236,17 @@ class sparkClient():
             Method that first reoders the columns to align with the Spark Schema and applies it afterwards
         """
         try:
+
             df = df.select(StructType.fieldNames(schema))
-            df = self.spark.createDataFrame(df.collect(), schema = schema)
+            # apply schema like this instead of collect to avoid collecting all data in memory
+            for field in schema.fields:
+                col_name = field.name
+                data_type = field.dataType
+                df = df.withColumn(col_name, F.col(col_name).cast(data_type))
+            # df = self.spark.createDataFrame(df.collect(), schema = schema)
             logging.info("Succesfully applied schema")
+
+
         except Exception as e:
             logging.error("Issue applying schema. Exiting...")
             logging.error(e)
