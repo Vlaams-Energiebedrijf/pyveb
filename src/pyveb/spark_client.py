@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 from time import time
 from functools import reduce
 import psutil
-import sys
 import json
 from typing import List, Dict
 from operator import itemgetter
@@ -20,6 +19,9 @@ from pyspark.sql.types import StructType, StructField, StringType, IntegerType, 
 import boto3
 
 from . import s3_client
+
+class SparkException(Exception):
+    pass
 
 class sparkClient():
     """
@@ -92,9 +94,9 @@ class sparkClient():
             spark.sparkContext.setLogLevel("ERROR")
             logging.info("Spark Session created")
         except Exception as e:
-            logging.error("Issue creating Spark Session. Exiting...")
+            logging.error("Issue creating Spark Session. Raising SparkException")
             logging.error(e)
-            sys.exit(1)
+            raise SparkException('_create_spark_session') from e
         return spark
 
     @staticmethod
@@ -127,9 +129,9 @@ class sparkClient():
             else:
                 new_df = df
         except Exception as e:
-            logging.error("Issue reading parquet Exiting...")
+            logging.error("Issue reading parquet. Raising SparkException")
             logging.error(e)
-            sys.exit(1)
+            raise SparkException('read_single_csv_file() failed') from e
         return new_df
 
     def read_single_parquet_file(self, file: str, schema: Dict[str, StructField] = None) -> SparkDataFrame:
@@ -146,9 +148,9 @@ class sparkClient():
             else:
                 new_df = df
         except Exception as e:
-            logging.error("Issue reading parquet Exiting...")
+            logging.error("Issue reading parquet Raising SparkException")
             logging.error(e)
-            sys.exit(1)
+            raise SparkException('read_single_parquet_file() failed') from e
         return new_df
 
     def read_multiple_csv_files(self, files: List[str], schema: Dict[str, StructField] = None, header: str = "true", delimiter: str = ";") -> SparkDataFrame:
@@ -168,9 +170,9 @@ class sparkClient():
             united_df = reduce(self._unite_dfs, list_of_dfs)
             logging.info("Succesfully read all files in a spark DF")
         except Exception as e:
-            logging.error("Issue reading parquet files and unioning them in spark DF Exiting...")
+            logging.error("Issue reading parquet files and unioning them in spark DF Raising SparkException")
             logging.error(e)
-            sys.exit(1)
+            raise SparkException('read_multiple_csv_files() failed') from e
         return united_df
     
     def read_multiple_parquet_files(self, files: List[str], schema: Dict[str, StructField] = None) -> SparkDataFrame:
@@ -190,9 +192,9 @@ class sparkClient():
             united_df = reduce(self._unite_dfs, list_of_dfs)
             logging.info("Succesfully read all files in a spark DF")
         except Exception as e:
-            logging.error("Issue reading parquet files and unioning them in spark DF Exiting...")
+            logging.error("Issue reading parquet files and unioning them in spark DF. Raising SparkException")
             logging.error(e)
-            sys.exit(1)
+            raise SparkException('read_multiple_parquet_files()') from e
         return united_df
 
     def pandas_df_to_spark_df(self, pandas_df: pd.DataFrame, schema=None) -> SparkDataFrame:
@@ -222,9 +224,9 @@ class sparkClient():
                 None
             logging.info(f'Succesfully wrote {s3_prefix}')
         except Exception as e:
-            logging.error(f'Issue creating parquet file: {s3_prefix}. Exiting...')
+            logging.error(f'Issue creating parquet file: {s3_prefix}. Raising SparkException')
             logging.error(e)
-            sys.exit(1)
+            raise SparkException('write_to_parquet() failed') from e
         return 
 
     @staticmethod
@@ -248,9 +250,9 @@ class sparkClient():
 
 
         except Exception as e:
-            logging.error("Issue applying schema. Exiting...")
+            logging.error("Issue applying schema. Raising SparkException")
             logging.error(e)
-            sys.exit(1)
+            raise SparkException('apply_schema() failed') from e
         return df
 
 
@@ -327,9 +329,9 @@ class sparkClient():
             new_df = df.select(*[self.udf_float_to_int(column).cast(IntegerType()).alias(column) if column in cols else column for column in df.columns])
             logging.info("Succesfully converted float columns back to int")
         except Exception as e:
-            logging.error("Issue converting float columns to int. Exiting...")
+            logging.error("Issue converting float columns to int. Raising SparkException")
             logging.error(e)
-            sys.exit(1)
+            raise SparkException('convert_float_to_int_int() failed') from e
         return new_df
 
     def convert_string_to_int_int(self, df: SparkDataFrame, cols: list) -> SparkDataFrame:
@@ -340,9 +342,9 @@ class sparkClient():
             new_df = df.select(*[self.udf_string_to_int(column).cast(IntegerType()).alias(column) if column in cols else column for column in df.columns])
             logging.info("Succesfully converted str columns to int")
         except Exception as e:
-            logging.error("Issue converting str columns to int. Exiting...")
+            logging.error("Issue converting str columns to int. Raising SparkException")
             logging.error(e)
-            sys.exit(1)
+            raise SparkException('convert_string_to_int_int() failed') from e
         return new_df
 
     def convert_string_to_timestamp(self, df: SparkDataFrame, cols: list) -> SparkDataFrame:
@@ -355,9 +357,9 @@ class sparkClient():
             new_df = df.select(*[self.udf_string_to_timestamp(column).cast(TimestampType()).alias(column) if column in cols else column for column in df.columns])
             logging.info("Succesfully converted string columns to timestamp")
         except Exception as e:
-            logging.error("Issue converting str columns to timestamp. Exiting...")
+            logging.error("Issue converting str columns to timestamp. Raising SparkException")
             logging.error(e)
-            sys.exit(1)
+            raise SparkException('convert_string_to_timestamp() failed') from e
         return new_df
 
     def convert_version(self, df: SparkDataFrame) -> SparkDataFrame: 
@@ -366,9 +368,9 @@ class sparkClient():
                 new_df = df.select(*[self.udf_unicode(column).alias('version') if column == 'version' else column for column in df.columns])
                 logging.info("Succesfully converted lynx version column to ascii.")
             except Exception as e:
-                logging.error("Issue converting lynx version column.Exiting...")
+                logging.error("Issue converting lynx version column.Raising SparkException")
                 logging.error(e)
-                sys.exit(1)
+                raise SparkException('convert_version() failed') from e
         else: new_df = df
         return new_df
 
@@ -399,9 +401,9 @@ class sparkClient():
                         .withColumn('META_processing_date_utc', F.lit(datetime.now(timezone.utc)))
             logging.info("Succesfully added metadata")
         except Exception as e:
-            logging.error("Issue adding metadata. Exiting...")
+            logging.error("Issue adding metadata. Raising SparkException")
             logging.error(e)
-            sys.exit(1)
+            raise SparkException('add_metadata() failed') from e
         return df
 
     @staticmethod
@@ -411,9 +413,9 @@ class sparkClient():
             # new_df = df.select([F.col(c).cast(schema[c]).alias(c) for c in df.columns])
             logging.info("Succesfully applied schema")
         except Exception as e:
-            logging.error("Issue enforcing schema. Exiting...")
+            logging.error("Issue enforcing schema. Raising SparkException")
             logging.error(e)
-            sys.exit(1)
+            raise SparkException('enforce_schema() failed') from e
         return new_df
 
     @staticmethod
@@ -426,9 +428,9 @@ class sparkClient():
             new_df = df.select(*columns_order)
             logging.info("Succesfully reindexed columns")
         except Exception as e:
-            logging.error("Issue reindexing columns. Exiting...")
+            logging.error("Issue reindexing columns. Raising SparkException")
             logging.error(e)
-            sys.exit(1)
+            raise SparkException('reindex_cols() failed') from e
         return new_df
 
     @staticmethod
