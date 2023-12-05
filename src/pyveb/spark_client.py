@@ -395,6 +395,7 @@ class sparkClient():
         """
         if not file_name: file_name = F.input_file_name()
         # partition_date = str(partition_date.date())
+        partition_date = partition_date.replace(tzinfo=timezone.utc)
         try: 
             df = df.withColumn('META_file_name', F.lit(file_name)) \
                         .withColumn('META_partition_date', F.lit(partition_date)) \
