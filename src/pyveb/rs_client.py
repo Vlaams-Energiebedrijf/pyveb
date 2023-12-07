@@ -239,7 +239,7 @@ class rsClient():
             if counter == 0:
                 line_target = f'{rs_target}.{col} = {rs_stage}.{col}'
             else:
-                line_target = f'AND {rs_target}.{col} = {rs_stage}.{col}'
+                line_target = f' AND {rs_target}.{col} = {rs_stage}.{col}'
             where_condition_target += str(line_target)
             counter =+ 1
         try:
