@@ -62,6 +62,8 @@ class sparkClient():
         nbr_cores = self._get_nbr_cores()
         access_key, secret_key, session_token = self._get_temp_batch_credentials()
 
+        # https://issues.apache.org/jira/browse/SPARK-27570
+        # https://stackoverflow.com/questions/58619600/spark-parquet-read-error-java-io-eofexception-reached-the-end-of-stream-with 
         try:
             if self.env == 'local' or not session_token:
                 logging.info('Building spark session w ProfileCredentialsProvider for S3 access')
@@ -73,6 +75,7 @@ class sparkClient():
                             .config("spark.sql.legacy.parquet.datetimeRebaseModeInRead", "LEGACY") \
                             .config("spark.sql.parquet.int96RebaseModeInWrite", "LEGACY")\
                             .config("fs.s3a.aws.credentials.provider","com.amazonaws.auth.profile.ProfileCredentialsProvider")\
+                            .config("fs.s3a.experimental.input.fadvise", "sequential")\
                             .getOrCreate()
 
             else:
@@ -86,6 +89,7 @@ class sparkClient():
                             .config("spark.sql.legacy.parquet.datetimeRebaseModeInRead", "LEGACY") \
                             .config("spark.sql.parquet.int96RebaseModeInWrite", "LEGACY")\
                             .config('fs.s3a.aws.credentials.provider', 'org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider')\
+                            .config("fs.s3a.experimental.input.fadvise", "sequential")\
                             .config('fs.s3a.access.key', access_key)\
                             .config('fs.s3a.secret.key', secret_key)\
                             .config('fs.s3a.session.token', session_token)\
@@ -227,6 +231,8 @@ class sparkClient():
             logging.error(f'Issue creating parquet file: {s3_prefix}. Raising SparkException')
             logging.error(e)
             raise SparkException('write_to_parquet() failed') from e
+        finally:
+            s3.close_client()
         return 
 
     @staticmethod

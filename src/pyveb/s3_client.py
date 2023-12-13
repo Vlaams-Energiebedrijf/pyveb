@@ -240,6 +240,10 @@ class s3Client():
             sys.exit(1)
         return file_stream
 
+    def close_client(self):
+        self.client.close()
+        return
+
 
 
 class externalS3Client():
