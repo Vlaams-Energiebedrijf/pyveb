@@ -8,6 +8,7 @@ import boto3
 from time import time
 from typing import List
 import uuid
+import psycopg2.extras
 
 class rsClient():
 
@@ -477,9 +478,26 @@ class rsClient():
             df.columns = col_names
             self._df_to_parquet_s3(df, s3_bucket, s3_prefix, s3_filename)
         return
-      
+    
+    # OLD implementation with a client side cursor
+    # def _stream_results(self, query:str, batch_size: int):
+    #     cursor = self.conn.cursor()
+    #     cursor.itersize = batch_size
+    #     cursor.execute(query)
+    #     while True:
+    #         rows = cursor.fetchmany(batch_size)
+    #         cols = cursor.description
+    #         if not rows:
+    #             break
+    #         yield rows, cols
+
+
+    # Server side cursor so full result set is only fetched in database memory, streamed in batches to the client and yielded in the same batches to the caller
+    # https://wiki.postgresql.org/wiki/Using_psycopg2_with_PostgreSQL
     def _stream_results(self, query:str, batch_size: int):
-        cursor = self.conn.cursor()
+        unique_id  = str(uuid.uuid4()).replace('-','')
+        cursor_name = f'server_side_cursor_{unique_id}'
+        cursor = self.conn.cursor(cursor_name, cursor_factory=psycopg2.extras.DictCursor )
         cursor.itersize = batch_size
         cursor.execute(query)
         while True:
