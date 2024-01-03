@@ -519,6 +519,17 @@ class dbtClient():
         logging.critical(f'Using the following filter params {filter_params}')
         runs_data = self._make_paginated_request(self.DBT_ENDPOINTS['runs'], filter_params = filter_params)
         return [self.parse_dbt_run(run) for run in runs_data]
+
+    def get_runs_gt_id(self, id__gt=0):
+        """
+            Returns a list of all DBT runs as dbtRun objects
+        """
+        filter_params = {
+            'id__gt': id__gt
+        }
+        logging.critical(f'Using the following filter params {filter_params}')
+        runs_data = self._make_paginated_request(self.DBT_ENDPOINTS['runs'], filter_params = filter_params)
+        return [self.parse_dbt_run(run) for run in runs_data]
     
     def get_run_by_id(self, run_id):
         """
