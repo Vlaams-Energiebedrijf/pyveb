@@ -6,6 +6,7 @@ import json
 from io import BytesIO
 import boto3
 from time import time
+from time import sleep
 from typing import List
 import uuid
 import psycopg2.extras
@@ -500,12 +501,15 @@ class rsClient():
         cursor = self.conn.cursor(cursor_name, cursor_factory=psycopg2.extras.DictCursor )
         cursor.itersize = batch_size
         cursor.execute(query)
-        while True:
-            rows = cursor.fetchmany(batch_size)
-            cols = cursor.description
-            if not rows:
-                break
-            yield rows, cols
+        try:
+            while True:
+                rows = cursor.fetchmany(batch_size)
+                cols = cursor.description
+                if not rows:
+                    break
+                yield rows, cols
+        finally:
+            cursor.close()
             
     def _df_to_parquet_s3(self, df:pd.DataFrame, s3_bucket: str, s3_prefix: str, file_name:str):
         parquet_buffer = BytesIO()
