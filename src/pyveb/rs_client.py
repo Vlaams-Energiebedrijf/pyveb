@@ -517,3 +517,6 @@ class rsClient():
         logging.info(f'Stored {s3_key} on s3 {s3_bucket}')
         del df
         return
+    
+    def close_connection(self):
+        self.conn.close()
