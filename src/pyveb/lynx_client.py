@@ -47,7 +47,7 @@ class lynxClient():
         connection_string = 'DRIVER={ODBC Driver 17 for SQL Server};SERVER=' + server + ';DATABASE=' + database + ';UID=' + username + ';PWD=' + password
         return connection_string
 
-    @retry(retries=3, error="Error creating connection to SQL server")
+    @retry(retries=5, error="Error creating connection to SQL server")
     def _connect(self, **kwargs) -> pyodbc.Connection:
         return pyodbc.connect(self._create_conn_string())
 
@@ -105,12 +105,15 @@ class lynxClient():
         nbr_cursors = cursor.getinfo(pyodbc.SQL_MAX_CONCURRENT_ACTIVITIES)
         return nbr_cursors
 
-    @retry(retries=3, error="Error executing stream_to_s3_parquet")
+    @retry(retries=5, error="Error executing stream_to_s3_parquet")
     def stream_to_s3_parquet(self, query:str, batch_size:int, s3_bucket:str, s3_prefix:str, s3_filename:str, **kwargs) -> None:
         """
             Streams the results of a sql query to parquet files on s3 with 'batch_size' nbr of rows per file. 
             Output files have the following key:
-                {s3_bucket}{s3_prefix}{timestamp}_{filename}.parquet        
+                {s3_bucket}{s3_prefix}{timestamp}_{filename}.parquet   
+
+            !!  Since we're not using named cursor this isn't really streaming, rather the data is completely pulled into the client from where it is 'streamed'
+                in batches to S3     
         """
         if kwargs['attempt'] > 1:       # ensure idempotency in case of retry
             s3 = boto3.resource('s3')
