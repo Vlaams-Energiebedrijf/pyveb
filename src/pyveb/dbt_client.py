@@ -1,3 +1,4 @@
+
 import logging, sys, os
 import json, requests
 from dataclasses import dataclass
@@ -6,6 +7,8 @@ import pandas as pd
 from time import sleep
 from typing import List
 import hashlib
+import inspect
+from functools import lru_cache
 
 ## testing connection errors
 class ConnectionErrorAdapter(requests.adapters.BaseAdapter):
@@ -237,6 +240,31 @@ class dbtProject:
 
         return int(hash_object.hexdigest(), 16)
 
+@dataclass
+class dbtModel:
+    database: str
+    schema: str
+    model_name: str
+
+    def __hash__(self):
+        # Create a hashable representation of the object's data fields
+        hashable_data = {
+            "database": self.run_id,
+            "schema": self.created_at,
+            "model_name": self.status
+        }
+
+        # Generate a hash value using hashlib
+        hash_object = hashlib.sha256()
+        for key, value in hashable_data.items():
+            hash_object.update(f"{key}:{value}".encode())
+
+        return int(hash_object.hexdigest(), 16)
+
+
+
+
+
 class AuthType:
     def __init__(self):
         None
@@ -407,6 +435,14 @@ class dbtClient():
         parsed_obj = dbtProject(project_id, project_name, connection_id, repository_id, created_at, updated_at, state)
         return parsed_obj
 
+    @staticmethod
+    def parse_dbt_model(obj) -> dbtModel : 
+        database = obj['database']
+        schema = obj['schema']
+        model_name = obj['name']
+        parsed_object = dbtModel(database, schema, model_name)
+        return parsed_object
+
     def _make_request(self, endpoint, data=None, pagination_params = {}, filter_params = {}):
         """
         Makes a request to the DBT API and handles the response.
@@ -431,6 +467,8 @@ class dbtClient():
                     res = self.session.get(url, params=json.loads(json.dumps(params_merged)))
 
                 if res.status_code == 200:
+                    if inspect.stack()[1].function == 'get_manifest':
+                        return res.text
                     res_dict = json.loads(res.text)
                     res_data = res_dict.get('data', None)
                     res.close()
@@ -582,6 +620,16 @@ class dbtClient():
         repositories_data = self._make_request(f"{self.DBT_ENDPOINTS['repositories']}/{repository_id}")
         return self.parse_dbt_repository(repositories_data)
 
+    @lru_cache(maxsize = None)
+    def get_manifest(self, job_id):
+        current_accept = self.headers["Accept"]
+        self.headers["Accept"] = 'text/html'
+        self.session.headers.update(self.headers)
+        manifest = self._make_request(f"jobs/{job_id}/artifacts/manifest.json")
+        self.headers["Accept"] = current_accept
+        self.session.headers.update(self.headers)
+        return manifest
+    
     @staticmethod 
     def check_duplicates(dataclass_list):
         seen = set()
@@ -607,7 +655,13 @@ class dbtClient():
 
         return pd.DataFrame(serialized_data)
 
-
+    def close_session(self):
+        try:
+            self.session.close()
+            logging.info("Closed API session")
+        except Exception as e:
+            logging.error("Error closing API session")
+            raise e
 
 
 
