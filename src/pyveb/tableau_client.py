@@ -179,7 +179,6 @@ class tableauRestClient:
         url = f'{self.tableau_url}/{endpoint}'
         response = self.session.get(url)
         rest_wb = json.loads(response.content)['workbook']
-        logging.error(rest_wb)
         all_users_dict = self.retrieve_all_users()
         webpage = rest_wb['webpageUrl']
         owner_id = rest_wb['owner']['id']
