@@ -191,8 +191,9 @@ class tableauRestClient:
         webpage = rest_wb['webpageUrl']
         owner_id = rest_wb['owner']['id']
         url = f'{self.tableau_url}/#/{webpage.split("/#/")[-1]}'
-        owner_name = all_users_dict[owner_id].get('name', None)
-        owner_role = all_users_dict[owner_id].get('site_role', None)
+
+        owner_name = all_users_dict.get(owner_id, {}).get('name', None)
+        owner_role = all_users_dict.get(owner_id, {}).get('site_role', None)
         return WbExt(wb.site, wb.project_name, wb.name, url, wb.luid, owner_id, owner_name, owner_role, rest_wb['createdAt'], rest_wb['updatedAt'], rest_wb.get('description', None), wb.tables, wb.datasources, wb.tags )
 
     def close_session(self) -> None:
