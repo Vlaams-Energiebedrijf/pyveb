@@ -186,15 +186,14 @@ class tableauRestClient:
         endpoint = f'api/{self.tableau_version}/sites/{self.site_id}/workbooks/{workbook_id}'
         url = f'{self.tableau_url}/{endpoint}'
         response = self.session.get(url)
-        rest_wb = json.loads(response.content)['workbook']
+        rest_wb = json.loads(response.content).get('workbook', None)
         all_users_dict = self.retrieve_all_users()
-        webpage = rest_wb['webpageUrl']
-        owner_id = rest_wb['owner']['id']
+        webpage = rest_wb.get('webpageUrl', None)
+        owner_id = rest_wb.get('owner', {}).get('id', None)
         url = f'{self.tableau_url}/#/{webpage.split("/#/")[-1]}'
-
         owner_name = all_users_dict.get(owner_id, {}).get('name', None)
         owner_role = all_users_dict.get(owner_id, {}).get('site_role', None)
-        return WbExt(wb.site, wb.project_name, wb.name, url, wb.luid, owner_id, owner_name, owner_role, rest_wb['createdAt'], rest_wb['updatedAt'], rest_wb.get('description', None), wb.tables, wb.datasources, wb.tags )
+        return WbExt(wb.site, wb.project_name, wb.name, url, wb.luid, owner_id, owner_name, owner_role, rest_wb.get('createdAt', None), rest_wb.get('updatedAt', None), rest_wb.get('description', None), wb.tables, wb.datasources, wb.tags )
 
     def close_session(self) -> None:
         endpoint = f'api/{self.tableau_version}/auth/signout'
