@@ -107,7 +107,7 @@ class tableauRestClient:
             all_users.extend(json.loads(response.content)['users']['user'])
         except KeyError:
             logging.critical('No users found, returning empty list of users')
-            return all_users
+            return {}
         pagination = json.loads(response.content)['pagination']
 
         page_number = int(pagination['pageNumber'])
