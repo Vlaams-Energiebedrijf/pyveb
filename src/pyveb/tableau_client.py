@@ -186,7 +186,7 @@ class tableauRestClient:
         endpoint = f'api/{self.tableau_version}/sites/{self.site_id}/workbooks/{workbook_id}'
         url = f'{self.tableau_url}/{endpoint}'
         response = self.session.get(url)
-        rest_wb = json.loads(response.content).get('workbook', None)
+        rest_wb = json.loads(response.content).get('workbook', {})
         all_users_dict = self.retrieve_all_users()
         webpage = rest_wb.get('webpageUrl', None)
         owner_id = rest_wb.get('owner', {}).get('id', None)
