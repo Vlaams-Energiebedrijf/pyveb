@@ -71,7 +71,11 @@ class tableauRestClient:
         response = self.session.get(url)
         response.raise_for_status()
         all_workbooks = []
-        all_workbooks.extend(json.loads(response.content)['workbooks']['workbook'])
+        try:
+            all_workbooks.extend(json.loads(response.content)['workbooks']['workbook'])
+        except KeyError:
+            logging.critical('No workbooks found, returning empty list of workbooks')
+            return all_workbooks
         pagination = json.loads(response.content)['pagination']
 
         page_number = int(pagination['pageNumber'])
@@ -99,7 +103,11 @@ class tableauRestClient:
         url = f'{self.tableau_url}/{endpoint}'
         response = self.session.get(url)
         all_users = []
-        all_users.extend(json.loads(response.content)['users']['user'])
+        try:
+            all_users.extend(json.loads(response.content)['users']['user'])
+        except KeyError:
+            logging.critical('No users found, returning empty list of users')
+            return all_users
         pagination = json.loads(response.content)['pagination']
 
         page_number = int(pagination['pageNumber'])
@@ -183,8 +191,8 @@ class tableauRestClient:
         webpage = rest_wb['webpageUrl']
         owner_id = rest_wb['owner']['id']
         url = f'{self.tableau_url}/#/{webpage.split("/#/")[-1]}'
-        owner_name = all_users_dict[owner_id]['name']
-        owner_role = all_users_dict[owner_id]['site_role']
+        owner_name = all_users_dict[owner_id].get('name', None)
+        owner_role = all_users_dict[owner_id].get('site_role', None)
         return WbExt(wb.site, wb.project_name, wb.name, url, wb.luid, owner_id, owner_name, owner_role, rest_wb['createdAt'], rest_wb['updatedAt'], rest_wb.get('description', None), wb.tables, wb.datasources, wb.tags )
 
     def close_session(self) -> None:
