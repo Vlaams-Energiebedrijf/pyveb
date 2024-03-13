@@ -130,8 +130,9 @@ class rsClient():
                 The target table will be truncated (ie we're using delete since truncate commits automatically)
                 and stage will be copied into target
         """
+        stage_uuid = str(uuid.uuid4()).replace('-','')
         rs_target = f'{rs_target_schema}.{rs_target_table}'
-        rs_stage = f'{rs_target}_TEMP_STAGE'
+        rs_stage = f'{rs_target}_TEMP_{stage_uuid}' 
         self._create_stage_like_target(rs_target, rs_stage, drop_sort_key=drop_sort_key)
         self._copy_parquet_into_stage(files, rs_stage)
         self._full_refresh(rs_target, rs_stage)
@@ -151,8 +152,9 @@ class rsClient():
             ADDITIONAL INFO
                 Records will be appended via insert into
         """
+        stage_uuid = str(uuid.uuid4()).replace('-','')
         rs_target = f'{rs_target_schema}.{rs_target_table}'
-        rs_stage = f'{rs_target}_TEMP_STAGE'
+        rs_stage = f'{rs_target}_TEMP_{stage_uuid}' 
         self._create_stage_like_target(rs_target, rs_stage, drop_sort_key=drop_sort_key)
         self._copy_parquet_into_stage(files, rs_stage)
         self._append(rs_target, rs_stage)
@@ -227,6 +229,7 @@ class rsClient():
 
     ## TO DO: add to insert function
 
+
     def _upsert(self, rs_target:str, rs_stage:str, upsert_keys:List[str]) -> None:
         """
             Upserts from rs_stage into rs_target table. 
@@ -264,6 +267,10 @@ class rsClient():
         except Exception as e:
                 logging.error('Issue UPSERTING stage into target. Exiting...')
                 logging.error(f'message: {e}', exc_info=True)
+                try: 
+                    self._query(f'DROP TABLE {rs_stage}')
+                except:
+                    logging.error('Issue dropping stage')
                 sys.exit(1)
 
     def _full_refresh(self, rs_target, rs_stage):
@@ -289,6 +296,10 @@ class rsClient():
         except Exception as e:
                 logging.error('Issue REFRESHING target. Exiting...')
                 logging.error(f'message: {e}', exc_info=True)
+                try: 
+                    self._query(f'DROP TABLE {rs_stage}')
+                except:
+                    logging.error('Issue dropping stage')
                 sys.exit(1)
     
     def _append(self, rs_target, rs_stage):
@@ -310,6 +321,10 @@ class rsClient():
         except Exception as e:
                 logging.error('Issue appending stage into target. Exiting...')
                 logging.error(f'message: {e}', exc_info=True)
+                try: 
+                    self._query(f'DROP TABLE {rs_stage}')
+                except:
+                    logging.error('Issue dropping stage')
                 sys.exit(1)
 
     def insert(self, insert_type: str, files: List[str], target_schema: str, target_table: str, upsert_keys: List[str] = None, drop_sort_key=False ) -> None:
