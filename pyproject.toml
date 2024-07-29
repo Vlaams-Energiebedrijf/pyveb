@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 
 [tool.poetry]
-version = "0.2.68"
+version = "0.2.69"
 name = "pyveb"
 authors = ["pieter <pieter.de.petter@veb.be>"]
 description = "Package containing common code and reusable components for pipelines and dags"
@@ -33,7 +33,6 @@ s3fs="0.4.2"
 pyarrow="14.0.1"
 pyodbc="5.1.0"
 xlrd="^2.0.0"
-attrdict="^2.0.1"
 Office365-REST-Python-Client="^2.4.0"
 xlsxwriter="^3.1.0"
 
