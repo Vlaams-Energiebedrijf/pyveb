@@ -201,6 +201,7 @@ class basisregisterAPI():
         self.session.headers.update(self.headers)
         return 
 
+
     def create_api_params_from_df(self,  df: pd.DataFrame) -> List[str]:
         """
             Method to create a list of json strings containing api params from a df of param columns.
