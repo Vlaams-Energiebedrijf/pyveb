@@ -306,4 +306,7 @@ class basisregisterAPI():
             logging.info("Closed API session")
         except Exception as e:
             logging.error("Error closing API session")
+
+    def __dummy__(self):
+        return True
       
