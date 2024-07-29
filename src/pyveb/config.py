@@ -2,9 +2,19 @@ import yaml
 import os
 import sys, inspect
 import logging
-from attrdict import AttrDict   # https://pypi.org/project/attrdict/
+# from attrdict import AttrDict   # https://pypi.org/project/attrdict/
 from pathlib import Path
 from datetime import datetime
+
+from collections import UserDict
+
+class AttrDict(UserDict):
+    def __getattr__(self, key):
+        return self.__getitem__(key)
+    def __setattr__(self, key, value):
+        if key == "data":
+            return super().__setattr__(key, value)
+        return self.__setitem__(key, value)
 
 def search_upwards_for_file(filename):
     """Search in the current directory and all directories above it 
