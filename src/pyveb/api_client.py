@@ -308,5 +308,5 @@ class basisregisterAPI():
             logging.error("Error closing API session")
 
     def __dummy__(self):
-        return True
+        return False
       
