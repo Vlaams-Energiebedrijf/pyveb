@@ -8,13 +8,29 @@ from datetime import datetime
 
 from collections import UserDict
 
+# class AttrDict(UserDict):
+#     def __getattr__(self, key):
+#         return self.__getitem__(key)
+#     def __setattr__(self, key, value):
+#         if key == "data":
+#             return super().__setattr__(key, value)
+#         return self.__setitem__(key, value)
+
+
 class AttrDict(UserDict):
     def __getattr__(self, key):
-        return self.__getitem__(key)
+        try:
+            return AttrDict(self.data[key]) if isinstance(self.data[key], dict) else self.data[key]
+        except KeyError:
+            raise AttributeError(f"'AttrDict' object has no attribute '{key}'")
+
     def __setattr__(self, key, value):
         if key == "data":
             return super().__setattr__(key, value)
-        return self.__setitem__(key, value)
+        self.data[key] = value
+
+    def __repr__(self):
+        return repr(self.data)
 
 def search_upwards_for_file(filename):
     """Search in the current directory and all directories above it 
