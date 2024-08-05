@@ -4,6 +4,7 @@ import os, sys, time
 import logging
 from io import BytesIO
 import pandas as pd
+import json
 
 class s3Client():
 
@@ -239,6 +240,16 @@ class s3Client():
             logging.error(e)
             sys.exit(1)
         return file_stream
+
+    def read_json(self,s3_file:str):
+        s3_prefix = s3_file.split('//')[1].split('/',1)[1]
+        try:
+            response = self.client.get_object(Bucket=self.bucket_name, Key=s3_prefix)
+            body = response['Body'].read()
+            return json.loads(body)
+        except Exception as e:
+            print(f"Error reading JSON from S3: {e}")
+            return None
 
     def close_client(self):
         self.client.close()
