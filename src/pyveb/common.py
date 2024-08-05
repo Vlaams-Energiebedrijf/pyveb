@@ -7,7 +7,12 @@ import sys
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 import psutil
 import argparse
-from typing import Dict
+from typing import Dict, List
+from botocore.exceptions import ClientError
+import boto3
+import time
+import json
+import pandas as pd
 
 cores = psutil.cpu_count(logical = False)
 
@@ -252,3 +257,106 @@ def parse_args() -> Dict:
         parser.error("In case pipeline_type = 'event', both event_bucket and event_prefix need to be included")
 
     return args
+
+def remove_duplicate_from_list_of_dicts(list_of_dicts):
+  unique_dicts = list(set(tuple(d.items()) for d in list_of_dicts))  
+  return [{k: v for k, v in item} for item in unique_dicts] 
+
+def remove_duplicates_from_list_of_dicts_by_key(list_of_dicts, key = None):
+  seen_ids = set()
+  unique_items = []
+
+  for item in list_of_dicts:
+    if item[key] not in seen_ids:
+      seen_ids.add(item[key])
+      unique_items.append(item)
+
+  return unique_items
+
+def list_of_dicts_to_json_s3(s3, list_of_dicts: List[Dict[str, str]], s3_prefix:str, s3_file_name:str, add_timestamp:bool =True) -> None:
+    """Writes a list of dictionaries as a JSON file to S3.
+
+    Args:
+        data: A list of dictionaries to write.
+        bucket_name: The name of the S3 bucket.
+        s3_key: The key (filename) under which to store the data in S3.
+    """
+    logging.info('Starting upload')
+
+    if add_timestamp:
+        timestamp = round(time.time(), 4)
+        s3_key = f'{s3_prefix}{timestamp}_{s3_file_name}.json'
+    else:
+        s3_key = f'{s3_prefix}{s3_file_name}.json'
+    
+    serialized_data = json.dumps(list_of_dicts, ensure_ascii=False)  # Ensure non-ASCII characters are handled
+    s3.client.put_object(Body=serialized_data.encode('utf-8'), Bucket=s3.bucket_name, Key=s3_key, ContentType='application/json')
+    logging.info('Succesfully uploaded to S3')
+    return
+
+def merge_dicts(array_a, array_b, merge_key, key_to_add_to_a_from_b):
+    """
+    Merges dictionaries from two arrays based on ID, adding keys D and F from B.
+
+    Args:
+        array_a: List of dictionaries (source array).
+        array_b: List of dictionaries (data to add).
+        key_d: Key in B to add as key D in the merged dictionary.
+        key_f: Key in B to add as key F in the merged dictionary.
+
+    Returns:
+        List of merged dictionaries.
+
+    Raises:
+        KeyError: If an ID from A is not found in B.
+    """
+    merged_array = []
+    id_map = {d[merge_key]: d for d in array_b}  # Create a dictionary for faster lookup by ID in B
+
+    for item in array_a:
+        item_id = item[merge_key]
+        if item_id not in id_map:
+            raise KeyError(f"{merge_key} {item_id} not found in array B")
+
+        # Add key-value pairs from B to a copy of the dictionary in A
+        merged_item = {**item, key_to_add_to_a_from_b: id_map[item_id][key_to_add_to_a_from_b]}
+        merged_array.append(merged_item)
+
+    return merged_array
+
+def get_secret(secret_name, secret_region):
+
+    session = boto3.session.Session()
+    client = session.client(
+        service_name='secretsmanager',
+        region_name=secret_region
+    )
+
+    try:
+        get_secret_value_response = client.get_secret_value(
+            SecretId=secret_name
+        )
+    except ClientError as e:
+        # For a list of exceptions thrown, see
+        # https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html
+        raise e
+
+    return get_secret_value_response['SecretString']
+
+def filter_list_of_dicts_on_key_value(list_of_dicts, key, target_value, case_sensitive = 'lower'):
+    """
+        case_sensitive = ['lower', 'upper', 'sensitive']
+    """
+    if case_sensitive == 'lower':
+        return [item for item in list_of_dicts if str(item[key]).lower() == str(target_value).lower()]
+    if case_sensitive == 'upper':
+        return [item for item in list_of_dicts if str(item[key]).lower() == str(target_value).upper()]
+    if case_sensitive == 'sensitive':
+        return [item for item in list_of_dicts if item[key] == target_value]
+
+def list_of_dicts_to_df(list_of_dicts):
+    return pd.DataFrame(list_of_dicts)
+
+def df_to_list_of_dicts(df):
+    return df.to_dict('records')
+

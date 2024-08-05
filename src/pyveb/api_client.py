@@ -310,3 +310,23 @@ class basisregisterAPI():
     def __dummy__(self):
         return False
       
+
+class CustomConnectionError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+        self.message = message
+
+class CustomTimeOutError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+        self.message = message
+
+class CustomError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+        self.message = message
+
+class RateLimitError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+        self.message = message
