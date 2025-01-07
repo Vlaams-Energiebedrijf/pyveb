@@ -63,7 +63,7 @@ class seleniumClient():
                 try:
                     service = Service()
                     driver = webdriver.Chrome(service=service, options=self._set_chrome_options())
-                    logging.info("Succesfully created chrome driver!")
+                    logging.info("Succesfully created chrome driver!!")
                 # in case our chromedriver on PATH is outdated, we remove it from PATH and selenium manager should automatically install a correct version in ~/.cache/selenium
                 # if the automated upgrade in ~/.cache/selenium is not working, we have to force delete chromedriver from there as well ( not operational currently)
                 except Exception as e:
