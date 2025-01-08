@@ -3,7 +3,7 @@ import os, sys
 import logging
 import pandas as pd
 import json
-from io import BytesIO
+from io import BytesIO, StringIO
 import boto3
 from time import time
 from time import sleep
@@ -495,6 +495,21 @@ class rsClient():
             self._df_to_parquet_s3(df, s3_bucket, s3_prefix, s3_filename)
         return
     
+    def stream_to_s3_csv(self, query:str, batch_size:int, s3_bucket:str, s3_prefix:str, s3_filename:str) -> None:
+        # sourcery skip: identity-comprehension
+        """
+            Streams the results of a sql query to parquet files on s3 with 'batch_size' nbr of rows per file. 
+            Output files have the following key:
+                {s3_bucket}{s3_prefix}{timestamp}_{filename}.parquet        
+        """
+        for rows, cols in self._stream_results(query, batch_size):
+            get_data = [x for x in rows]
+            col_names = [y[0] for y in cols]
+            df = pd.DataFrame(get_data)
+            df.columns = col_names
+            self._df_to_csv_s3(df, s3_bucket, s3_prefix, s3_filename)
+        return
+    
     # OLD implementation with a client side cursor
     # def _stream_results(self, query:str, batch_size: int):
     #     cursor = self.conn.cursor()
@@ -533,6 +548,17 @@ class rsClient():
         timestamp = round(time(), 4)
         s3_key = f"{s3_prefix}{timestamp}_{file_name}.parquet"
         s3.Object(s3_bucket, s3_key).put(Body=parquet_buffer.getvalue())
+        logging.info(f'Stored {s3_key} on s3 {s3_bucket}')
+        del df
+        return
+    
+    def _df_to_csv_s3(self, df: pd.DataFrame, s3_bucket: str, s3_prefix: str, file_name: str):
+        csv_buffer = StringIO()
+        df.to_csv(csv_buffer, index=False)
+        s3 = boto3.resource('s3')
+        timestamp = round(time(), 4)
+        s3_key = f"{s3_prefix}{timestamp}_{file_name}.csv"
+        s3.Object(s3_bucket, s3_key).put(Body=csv_buffer.getvalue())
         logging.info(f'Stored {s3_key} on s3 {s3_bucket}')
         del df
         return
