@@ -2,6 +2,7 @@
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 import logging
 import sys
 import os
@@ -62,9 +63,6 @@ class seleniumClient():
             # https://stackoverflow.com/questions/76724939/there-is-no-such-driver-by-url-https-chromedriver-storage-googleapis-com-lates
             # https://stackoverflow.com/questions/76727774/selenium-webdriver-chrome-115-stopped-working?rq=1
             # chrome iterates very quickly, hence chrome and chromedriver diverge. Hence, when running local, we can ensure match between both with below code
-                from selenium.webdriver.chrome.service import Service
-                import os
-            
                 try:
                     service = Service()
                     driver = webdriver.Chrome(service=service, options=self._set_chrome_options())
