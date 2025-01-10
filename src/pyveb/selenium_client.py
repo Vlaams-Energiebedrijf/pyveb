@@ -1,13 +1,15 @@
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
 import logging
 import sys
 import os
 import time
 import urllib
 
-FILE_PATH = "/usr/local/bin/chromedriver"
+FILE_PATH_LOCAL = "/usr/local/bin/chromedriver"
+FILE_PATH_DOCKER = "/usr/local/bin/chromedriver-linux64/chromedriver"
 
 class seleniumClient():
 
@@ -21,7 +23,6 @@ class seleniumClient():
         self.env = env
         self.url = url
         self.driver = self._create_driver()
-        self.driver.set_window_size(800, 600)
 
     def _set_chrome_options(self) -> None:
         """
@@ -29,25 +30,29 @@ class seleniumClient():
             Chrome options for headless browser is enabled.
             based on https://github.com/nazliander/scrape-nr-of-deaths-istanbul/blob/master/app.py
         """
-        download_file_path = os.path.join(os.getcwd(), 'temp_data')
-        path_exists = os.path.exists(download_file_path)
-        if not path_exists:
-            os.makedirs(download_file_path)
-        options = webdriver.ChromeOptions()
+        options = Options()
         options.add_argument("--headless=new")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
-        prefs = {
-            "download.default_directory": download_file_path,
-        }
-
-        options.add_experimental_option("prefs",prefs)
-
-        # chrome_prefs = {
-        #     "download": {"default_directory": "./temp_data"},
-        #     "profile.default_content_settings": {"images": 2},
-        # }
-        # chrome_options.add_experimental_option("prefs", chrome_prefs)
+        options.add_argument("--disable-gpu")
+        options.add_argument("--window-size=800,600")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--disable-infobars")
+        options.add_argument("--disable-browser-side-navigation")
+        options.add_argument("--disable-features=VizDisplayCompositor")
+        # Enable logging
+        options.add_argument("--enable-logging")
+        options.add_argument("--v=1")
+        # Set download directory to /tmp/downloads
+        options.add_experimental_option(
+            "prefs",
+            {
+                "download.default_directory": "/tmp/downloads",
+                "download.prompt_for_download": False,
+                "directory_upgrade": True,
+                "safebrowsing.enabled": True,
+            },
+        )
         return options
 
     def _create_driver(self):
@@ -68,18 +73,21 @@ class seleniumClient():
                 # if the automated upgrade in ~/.cache/selenium is not working, we have to force delete chromedriver from there as well ( not operational currently)
                 except Exception as e:
                     logging.info(f"Chromedriver is outdated. Deleting and trying again. {e}")
-                    if os.path.exists(FILE_PATH):
-                        os.remove(FILE_PATH)
-                        logging.info(f"Chromedriver {FILE_PATH} deleted.")
+                    if os.path.exists(FILE_PATH_LOCAL):
+                        os.remove(FILE_PATH_LOCAL)
+                        logging.info(f"Chromedriver {FILE_PATH_LOCAL} deleted.")
                         service = Service()
                         driver = webdriver.Chrome(service=service, options=self._set_chrome_options())
                         logging.info("Succesfully created chrome driver")
                     else:
-                        logging.critical(f"Chromedriver {FILE_PATH} does not exist.")
+                        logging.critical(f"Chromedriver {FILE_PATH_LOCAL} does not exist.")
                         sys.exit(1) 
             else:
-                # driver and chrome are installed in docker image so we can use standard way of creating webdriver
-                driver = webdriver.Chrome(options=self._set_chrome_options())
+                # chrome & driver are installed on docker image 
+                service = Service(FILE_PATH_DOCKER)
+                logging.info('Selenium Service created')
+                driver = webdriver.Chrome(service=service, options=self._set_chrome_options())
+                logging.info('Selenium Chrome webdriver succesfuly created')
         except Exception as error: 
             logging.error('Issue creating chrome driver. Exiting with status 1')
             logging.error(error)
