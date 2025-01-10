@@ -23,7 +23,6 @@ class seleniumClient():
         self.env = env
         self.url = url
         self.driver = self._create_driver()
-        self.driver.set_window_size(800, 600)
 
     def _set_chrome_options(self) -> None:
         """
@@ -36,7 +35,7 @@ class seleniumClient():
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
-        options.add_argument("--window-size=1920,1080")
+        options.add_argument("--window-size=800,600")
         options.add_argument("--disable-extensions")
         options.add_argument("--disable-infobars")
         options.add_argument("--disable-browser-side-navigation")
