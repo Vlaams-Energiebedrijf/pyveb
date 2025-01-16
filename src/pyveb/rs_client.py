@@ -544,9 +544,9 @@ class rsClient():
     def _df_to_parquet_s3(self, df:pd.DataFrame, s3_bucket: str, s3_prefix: str, file_name:str, coerce_to_microseconds:bool):
         parquet_buffer = BytesIO()
         if coerce_to_microseconds:
-            df.to_parquet(parquet_buffer, index=False, allow_truncated_timestamps=True)
+            df.to_parquet(parquet_buffer, index=False, allow_truncated_timestamps=True, coerce_timestamps='us' )
         else: 
-             df.to_parquet(parquet_buffer, index=False, allow_truncated_timestamps=True, coerce_timestamps='us' )
+             df.to_parquet(parquet_buffer, index=False, allow_truncated_timestamps=True )
         s3 = boto3.resource('s3')
         timestamp = round(time(), 4)
         s3_key = f"{s3_prefix}{timestamp}_{file_name}.parquet"
