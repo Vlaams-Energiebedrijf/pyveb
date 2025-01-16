@@ -480,7 +480,7 @@ class rsClient():
         path_params= df[rs_source_column].tolist()
         return path_params
 
-    def stream_to_s3_parquet(self, query:str, batch_size:int, s3_bucket:str, s3_prefix:str, s3_filename:str) -> None:
+    def stream_to_s3_parquet(self, query:str, batch_size:int, s3_bucket:str, s3_prefix:str, s3_filename:str, coerce_to_microseconds:bool = False) -> None:
         # sourcery skip: identity-comprehension
         """
             Streams the results of a sql query to parquet files on s3 with 'batch_size' nbr of rows per file. 
@@ -492,7 +492,7 @@ class rsClient():
             col_names = [y[0] for y in cols]
             df = pd.DataFrame(get_data)
             df.columns = col_names
-            self._df_to_parquet_s3(df, s3_bucket, s3_prefix, s3_filename)
+            self._df_to_parquet_s3(df, s3_bucket, s3_prefix, s3_filename, coerce_to_microseconds)
         return
     
     def stream_to_s3_csv(self, query:str, batch_size:int, s3_bucket:str, s3_prefix:str, s3_filename:str, separator:str = ';') -> None:
@@ -541,9 +541,12 @@ class rsClient():
         finally:
             cursor.close()
             
-    def _df_to_parquet_s3(self, df:pd.DataFrame, s3_bucket: str, s3_prefix: str, file_name:str):
+    def _df_to_parquet_s3(self, df:pd.DataFrame, s3_bucket: str, s3_prefix: str, file_name:str, coerce_to_microseconds:bool):
         parquet_buffer = BytesIO()
-        df.to_parquet(parquet_buffer, index=False, allow_truncated_timestamps=True)
+        if coerce_to_microseconds:
+            df.to_parquet(parquet_buffer, index=False, allow_truncated_timestamps=True, coerce_timestamps='us' )
+        else: 
+             df.to_parquet(parquet_buffer, index=False, allow_truncated_timestamps=True )
         s3 = boto3.resource('s3')
         timestamp = round(time(), 4)
         s3_key = f"{s3_prefix}{timestamp}_{file_name}.parquet"
