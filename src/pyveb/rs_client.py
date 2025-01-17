@@ -13,25 +13,34 @@ import psycopg2.extras
 
 class rsClient():
 
-    def __init__(self, env, rs_iam_role):
+    def __init__(self, env, rs_iam_role, credentials = None):
         """
             When deploying, environment variables are injected depending on ENV via entrypoint.sh.
             For local development, we fetch environemnt variables from local enviroment where we have variables for local, dev and prd, hence the except statement.
 
             ! since we don't have a local redshift cluster we load into redshift dev 
         """
-        try:
-            dbname=os.environ['REDSHIFT_DB']
-            user = os.environ['REDSHIFT_UNAME']
-            password = os.environ['REDSHIFT_PASSWORD']
-            host = os.environ['REDSHIFT_HOST']
-            port = os.environ['REDSHIFT_PORT']
-        except Exception: 
-            dbname=os.environ[f'REDSHIFT_DB_{env.upper()}']
-            user = os.environ[f'REDSHIFT_UNAME_{env.upper()}']
-            password = os.environ[f'REDSHIFT_PASSWORD_{env.upper()}']
-            host = os.environ[f'REDSHIFT_HOST_{env.upper()}']
-            port = os.environ[f'REDSHIFT_PORT_{env.upper()}']
+        # V2 - instead of fetching credentials from the environment, we pass secret_name
+        if credentials:
+                dbname=credentials['db']
+                user = credentials['username']
+                password = credentials['password']
+                host = credentials['host']
+                port = credentials['port']
+        else:
+        
+            try:
+                dbname=os.environ['REDSHIFT_DB']
+                user = os.environ['REDSHIFT_UNAME']
+                password = os.environ['REDSHIFT_PASSWORD']
+                host = os.environ['REDSHIFT_HOST']
+                port = os.environ['REDSHIFT_PORT']
+            except Exception: 
+                dbname=os.environ[f'REDSHIFT_DB_{env.upper()}']
+                user = os.environ[f'REDSHIFT_UNAME_{env.upper()}']
+                password = os.environ[f'REDSHIFT_PASSWORD_{env.upper()}']
+                host = os.environ[f'REDSHIFT_HOST_{env.upper()}']
+                port = os.environ[f'REDSHIFT_PORT_{env.upper()}']
         try:
             logging.info('Establishing connection to redshift via psycopg2')
             self.conn = psycopg2.connect(dbname=dbname,user = user,password = password,host = host, port = port)
