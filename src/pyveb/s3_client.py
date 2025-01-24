@@ -155,6 +155,35 @@ class s3Client():
             logging.error(e)
             sys.exit(1)
         return
+    
+    def upload_json_object(self, json_data: dict, s3_prefix: str, file_name: str) -> None:
+        """
+        Upload an in-memory JSON object to S3.
+
+        Arguments:
+            json_data: The JSON object to upload (Python dictionary).
+            s3_prefix: The target folder path in the S3 bucket.
+            file_name: The name of the file to save in S3 (e.g., 'file.json').
+
+        Returns:
+            None
+
+        Additional Info:
+            Use this function to upload a JSON object as a file in S3.
+        """
+        target_file = f'{s3_prefix}{file_name}'
+        try:
+            logging.info('Uploading JSON object...')
+            # Convert the JSON data to a bytes object
+            json_bytes = BytesIO(json.dumps(json_data).encode('utf-8'))
+            # Upload the in-memory bytes object to S3
+            self.client.upload_fileobj(json_bytes, self.bucket_name, target_file)
+            logging.info(f'Uploaded JSON object to {target_file}')
+        except Exception as e:
+            logging.error(f'Issue uploading JSON object to {target_file}')
+            logging.error(e)
+            sys.exit(1)
+        return
 
     def df_to_parquet(self, df: pd.DataFrame, s3_prefix:str, s3_file_name:str, add_timestamp:bool = True ) -> None:
         """
