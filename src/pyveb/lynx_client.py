@@ -106,14 +106,17 @@ class lynxClient():
         return nbr_cursors
 
     @retry(retries=5, error="Error executing stream_to_s3_parquet")
-    def stream_to_s3_parquet(self, query:str, batch_size:int, s3_bucket:str, s3_prefix:str, s3_filename:str, **kwargs) -> None:
+    def stream_to_s3_parquet(self, query:str, batch_size:int, s3_bucket:str, s3_prefix:str, s3_filename:str, datetime_timeunit=None, **kwargs) -> None:
         """
             Streams the results of a sql query to parquet files on s3 with 'batch_size' nbr of rows per file. 
             Output files have the following key:
                 {s3_bucket}{s3_prefix}{timestamp}_{filename}.parquet   
 
-            !!  Since we're not using named cursor this isn't really streaming, rather the data is completely pulled into the client from where it is 'streamed'
-                in batches to S3     
+            kwargs:
+                    datetime_unit - enforce strict time unit when storing to parquet
+                        'milli': 'ms'
+                        'micro': 'us'
+   
         """
         if kwargs['attempt'] > 1:       # ensure idempotency in case of retry
             s3 = boto3.resource('s3')
@@ -122,10 +125,10 @@ class lynxClient():
         for x in self._stream_results(query, batch_size):
             col_names = [column[0] for column in x[0].cursor_description]
             df = pd.DataFrame.from_records(x, columns=col_names)
-            self._df_to_parquet_s3(df, s3_bucket, s3_prefix, s3_filename)
+            self._df_to_parquet_s3(df, s3_bucket, s3_prefix, s3_filename, datetime_timeunit )
         return
          
-    def _stream_results(self, query:str, batch_size: int) -> None:
+    def _stream_results(self, query:str, batch_size: int):
         cursor = self._create_cursor()
         cursor_iterator = cursor.execute(query)
         while True:
@@ -136,9 +139,15 @@ class lynxClient():
             # for row in rows:
             #     yield row
 
-    def _df_to_parquet_s3(self, df:pd.DataFrame, s3_bucket: str, s3_prefix: str, file_name:str) -> None:
+    def _df_to_parquet_s3(self, df:pd.DataFrame, s3_bucket: str, s3_prefix: str, file_name:str, datetime_timeunit:str) -> None:
         parquet_buffer = BytesIO()
-        df.to_parquet(parquet_buffer, index=False, allow_truncated_timestamps=True)
+        if datetime_timeunit:
+            # Convert all datetime columns to microsecond precision
+            for col in df.select_dtypes(include=['datetime']):
+                df[col] = df[col].dt.floor(datetime_timeunit)  # Ensure microseconds precision
+            df.to_parquet(parquet_buffer, index=False, allow_truncated_timestamps=True, coerce_timestamps=datetime_timeunit)  # Explicitly enforce microseconds
+        else:
+            df.to_parquet(parquet_buffer, index=False, allow_truncated_timestamps=True)
         s3 = boto3.resource('s3')
         timestamp = round(time(), 4)
         s3_key = f"{s3_prefix}{timestamp}_{file_name}.parquet"
