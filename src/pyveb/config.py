@@ -7,6 +7,8 @@ from pathlib import Path
 from datetime import datetime
 
 from collections import UserDict
+from datetime import datetime
+from dateutil import parser
 
 # class AttrDict(UserDict):
 #     def __getattr__(self, key):
@@ -59,15 +61,52 @@ def search_upwards_for_file(filename):
         d = d.parent
     return None
 
-def create_partition_key(execution_date:datetime) -> str:
+
+def clean_airflow_date(execution_date):
+    if isinstance(execution_date, datetime):
+        return execution_date.replace(microsecond=0).replace(tzinfo=None)
+
+    elif isinstance(execution_date, str):
+        dt = parser.parse(execution_date)
+        dt = dt.replace(tzinfo=None)
+        return dt.replace(microsecond=0)
+
+    else:
+        raise ValueError("Invalid input type. Must be a string or datetime.")
+
+def create_partition_key(execution_date:datetime, partition_granularity:str = 'day') -> str:
     """
         ARGUMENT
-            partition_date: date of airflow task start date. eg 2020-01-01 12:00
+            partition_date: date of airflow task start date. eg 2020-01-01 or 2020-01-01T00:00:00+00:00 
+
+        kwargs: 
+
+            partition_granularity ['day', 'hour', 'minute', 'second']
+
+                if day: "year={year}/month={month}/day={day}/"   
+                if hour: "year={year}/month={month}/day={day}/hour={hour}"  
+                if minute: "year={year}/month={month}/day={day}/hour={hour}/minute={minute}"  
+                if second: "year={year}/month={month}/day={day}/hour={hour}/minute={minute}/second={second}"  
+        
     """
     day = '{:02d}'.format(execution_date.day)
     month = '{:02d}'.format(execution_date.month)
     year = execution_date.year
-    return f"year={year}/month={month}/day={day}/"
+    hour = '{:02d}'.format(execution_date.hour)
+    minute = '{:02d}'.format(execution_date.minute)
+    second = '{:02d}'.format(execution_date.second)
+
+    if partition_granularity == 'day':
+        return f"year={year}/month={month}/day={day}/"
+    if partition_granularity == 'hour':
+        return f"year={year}/month={month}/day={day}/hour={hour}"
+    if partition_granularity == 'minute':
+        return f"year={year}/month={month}/day={day}/hour={hour}/minute={minute}"
+    if partition_granularity == 'second':
+        return f"year={year}/month={month}/day={day}/hour={hour}/minute={minute}/second={second}"
+    else:
+        logging.error('Provided incorrect partition granularity. Allowed values: day, hour, minute or second')
+
 
 class Config():
 
@@ -88,6 +127,7 @@ class Config():
         self.source = self._parse_source()
         self.transform = self._parse_transform()
         self.target = self._parse_target()
+        self.partition_granularity = kwargs.get('partition_granularity')
 
     def _read_config_yaml(self) -> dict:
         file_path = search_upwards_for_file(self.CONFIG_NAME)
@@ -111,6 +151,11 @@ class Config():
         """
             General section is valid for all environments
         """
+
+        if self.partition_granularity:
+            partition_key = create_partition_key(self.airflow_execution_date, partition_granularity=self.partition_granularity)
+        else:
+            partition_key = create_partition_key(self.airflow_execution_date)
         if self.file.general:
             general = self.file.general
             general['prefix_env'] = getattr(general.prefix_env, self.env) 
@@ -132,9 +177,9 @@ class Config():
                 common_prefix = f'{general.prefix_env}/{general.pipeline_name}/reporting_year={self.year}/{self.pipeline_type}'
             else: 
                 common_prefix = f'{general.prefix_env}/{general.pipeline_name}/{self.pipeline_type}'
-            general['partition_raw'] = f'{common_prefix}/{general.prefix_raw}/{self.task}/{create_partition_key(self.airflow_execution_date)}'
-            general['partition_processed'] = f'{common_prefix}/{general.prefix_processed}/{self.task}/{create_partition_key(self.airflow_execution_date)}'
-            general['logs'] = f'{general.prefix_logs}/{common_prefix}/{self.task}/{create_partition_key(self.airflow_execution_date)}{datetime.now()}.log'
+            general['partition_raw'] = f'{common_prefix}/{general.prefix_raw}/{self.task}/{partition_key}'
+            general['partition_processed'] = f'{common_prefix}/{general.prefix_processed}/{self.task}/{partition_key}'
+            general['logs'] = f'{general.prefix_logs}/{common_prefix}/{self.task}/{partition_key}{datetime.now()}.log'
             return general
         logging.error('Mandatory general section not found')
         sys.exit(1)
