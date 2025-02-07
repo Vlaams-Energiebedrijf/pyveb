@@ -232,6 +232,7 @@ def parse_args() -> Dict:
             '--event_prefix', type=str
             '--year', type=str. In case we need to run a pipeline yearly, for example VLABEL process is a yearly process. Specify for which year you want to execute
             '--data_sources, type = list, see dags in pipeline basisregistere_gebouw for usage 
+            '--partition_granularity, type = string, see dag cogenius_spot for usage
 
 
 
@@ -248,6 +249,7 @@ def parse_args() -> Dict:
     parser.add_argument('--event_prefix', type=str)
     parser.add_argument('--year', type=int)
     parser.add_argument('--data_sources', nargs='+', default=[], )
+    parser.add_argument('--partition_granularity', type=int)
 
     # parse arguments
     args = parser.parse_args()
