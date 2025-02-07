@@ -207,17 +207,17 @@ def multiprocessing(func, input_list, *args, max_workers=cores, **kwargs):
                 print('%r generated an exception: %s' % (x, exc))
     return results, errors
 
-def valid_date(x: str) -> bool:
-        """ 
-            Checks whether a string has date format %Y-%m-%d (ie. 2020-01-01). 
+# def valid_date(x: str) -> bool:
+#         """ 
+#             Checks whether a string has date format %Y-%m-%d (ie. 2020-01-01). 
             
-            Returns datetime object or raises a ValueError
-        """
-        try:
-            return datetime.strptime(x, "%Y-%m-%d")
-        except ValueError as e:
-            msg = "Not a valid date: {0!r}".format(x)
-            raise argparse.ArgumentTypeError(msg) from e
+#             Returns datetime object or raises a ValueError
+#         """
+#         try:
+#             return datetime.strptime(x, "%Y-%m-%d")
+#         except ValueError as e:
+#             msg = "Not a valid date: {0!r}".format(x)
+#             raise argparse.ArgumentTypeError(msg) from e
 
 def parse_args() -> Dict:
     """
@@ -242,7 +242,7 @@ def parse_args() -> Dict:
     # add arguments
     parser.add_argument('--env', '-e', default ='local', type = str, choices = ['local', 'dev', 'prd', 'stg'])
     parser.add_argument('--type', '-t', default = 'incremental', type = str, choices = ['event', 'incremental', 'full_refresh'])
-    parser.add_argument('--airflow_execution_date', '-d', default = '2020-01-01', type = valid_date)
+    parser.add_argument('--airflow_execution_date', '-d', default = '2020-01-01')
     parser.add_argument('--task', '-task', type = str, required=True)
     parser.add_argument('--event_bucket', type=str )
     parser.add_argument('--event_prefix', type=str)
