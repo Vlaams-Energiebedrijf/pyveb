@@ -253,7 +253,7 @@ def parse_args() -> Dict:
         ARGUMENTS
             '--env', '-e', default ='local', type = str, choices = ['local', 'dev', 'prd']
             '--type', '-t', default = 'incremental', type = str, choices = ['event', 'incremental', 'full']
-            '--airflow_execution_date', '-d', default = '2020-01-01', type = valid_date
+            '--airflow_execution_date', '-d', default = '2020-01-01', type = string_to_datetime
             '--task', '-task', type = str, required=True
             '--event_bucket', type=str
             '--event_prefix', type=str
