@@ -122,12 +122,13 @@ class Config():
         self.event_bucket = kwargs.get('event_bucket')
         self.event_prefix = kwargs.get('event_prefix')
         self.year = kwargs.get('year')
+        self.partition_granularity = kwargs.get('partition_granularity')
         self.file = AttrDict(self._read_config_yaml())
         self.general = self._parse_general()
         self.source = self._parse_source()
         self.transform = self._parse_transform()
         self.target = self._parse_target()
-        self.partition_granularity = kwargs.get('partition_granularity')
+
 
     def _read_config_yaml(self) -> dict:
         file_path = search_upwards_for_file(self.CONFIG_NAME)
