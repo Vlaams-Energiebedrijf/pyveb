@@ -219,6 +219,33 @@ def multiprocessing(func, input_list, *args, max_workers=cores, **kwargs):
 #             msg = "Not a valid date: {0!r}".format(x)
 #             raise argparse.ArgumentTypeError(msg) from e
 
+def string_to_datetime(x: str) -> datetime:
+    """
+    Converts a string representing a date or datetime to a datetime object.
+
+    Supports various input formats:
+        - YYYY-MM-DD
+        - YYYY-MM-DDTHH:MM:SS
+        - YYYY-MM-DDTHH:MM:SS+00:00 (ISO 8601 with timezone offset)
+        - YYYY-MM-DDTHH:MM:SS.ffffff (microseconds)
+        - YYYY-MM-DDTHH:MM:SSZ (ISO 8601 with Z for Zulu time)
+
+    Args:
+        x: The string representing the date or datetime.
+
+    Returns:
+        A datetime object if the conversion is successful, otherwise None.
+    """
+
+    try:
+        # Attempt to parse with various formats
+        return datetime.fromisoformat(x)  # Handles ISO 8601 formats
+    except ValueError:
+        try:
+            return datetime.strptime(x, "%Y-%m-%d")  # Handle YYYY-MM-DD format
+        except ValueError:
+            return None  # Return None if no format matches
+
 def parse_args() -> Dict:
     """
         Parses command line arguments and returns dictionary of arguments which can be accessed via dot notation
@@ -243,7 +270,7 @@ def parse_args() -> Dict:
     # add arguments
     parser.add_argument('--env', '-e', default ='local', type = str, choices = ['local', 'dev', 'prd', 'stg'])
     parser.add_argument('--type', '-t', default = 'incremental', type = str, choices = ['event', 'incremental', 'full_refresh'])
-    parser.add_argument('--airflow_execution_date', '-d', default = '2020-01-01')
+    parser.add_argument('--airflow_execution_date', '-d', default = '2020-01-01', type = string_to_datetime)
     parser.add_argument('--task', '-task', type = str, required=True)
     parser.add_argument('--event_bucket', type=str )
     parser.add_argument('--event_prefix', type=str)
