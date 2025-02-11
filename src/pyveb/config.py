@@ -99,11 +99,11 @@ def create_partition_key(execution_date:datetime, partition_granularity:str = 'd
     if partition_granularity == 'day':
         return f"year={year}/month={month}/day={day}/"
     if partition_granularity == 'hour':
-        return f"year={year}/month={month}/day={day}/hour={hour}"
+        return f"year={year}/month={month}/day={day}/hour={hour}/"
     if partition_granularity == 'minute':
-        return f"year={year}/month={month}/day={day}/hour={hour}/minute={minute}"
+        return f"year={year}/month={month}/day={day}/hour={hour}/minute={minute}/"
     if partition_granularity == 'second':
-        return f"year={year}/month={month}/day={day}/hour={hour}/minute={minute}/second={second}"
+        return f"year={year}/month={month}/day={day}/hour={hour}/minute={minute}/second={second}/"
     else:
         logging.error('Provided incorrect partition granularity. Allowed values: day, hour, minute or second')
 
