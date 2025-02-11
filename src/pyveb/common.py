@@ -276,7 +276,7 @@ def parse_args() -> Dict:
     parser.add_argument('--event_prefix', type=str)
     parser.add_argument('--year', type=int)
     parser.add_argument('--data_sources', nargs='+', default=[], )
-    parser.add_argument('--partition_granularity', type=int)
+    parser.add_argument('--partition_granularity', type=str)
 
     # parse arguments
     args = parser.parse_args()
