@@ -84,9 +84,9 @@ def create_partition_key(execution_date:datetime, partition_granularity:str = 'd
             partition_granularity ['day', 'hour', 'minute', 'second']
 
                 if day: "year={year}/month={month}/day={day}/"   
-                if hour: "year={year}/month={month}/day={day}/hour={hour}"  
-                if minute: "year={year}/month={month}/day={day}/hour={hour}/minute={minute}"  
-                if second: "year={year}/month={month}/day={day}/hour={hour}/minute={minute}/second={second}"  
+                if hour: "year={year}/month={month}/day={day}/hour={hour}/"  
+                if minute: "year={year}/month={month}/day={day}/hour={hour}/minute={minute}/"  
+                if second: "year={year}/month={month}/day={day}/hour={hour}/minute={minute}/second={second}/"  
         
     """
     day = '{:02d}'.format(execution_date.day)
