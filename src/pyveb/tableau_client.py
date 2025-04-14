@@ -253,6 +253,9 @@ class tableauRestClient:
         if obj['embeddedDatasources']:
             for x in obj['embeddedDatasources']:
                 for y in x['upstreamTables']:
+                    if not y.get('database') or not y['database'].get('name'):
+                        logging.warning(f"Skipping table with missing DB info: {y}")
+                        continue
                     t = Table(y['connectionType'], y['database']['name'], y['schema'], y['name'])
                     list_tables.append(t)
         list_datasources = []
