@@ -9,22 +9,26 @@ import os
 import time
 import urllib
 
-FILE_PATH_LOCAL = "/usr/local/bin/chromedriver"
-FILE_PATH_DOCKER = "/usr/local/bin/chromedriver-linux64/chromedriver"
 
+## We updated the selenium client 2025 april. We had a complex logic for creating the driver in order to ensure chrome and chrome driver were in sync, 
+## both locally and in docker file. This was leading to numerous issues so we decided to fix the chrome version and driver in the docker file ( see repository kbo register - src / extract / dockerfile)
+## allowing for a simplified setup which works locally
 class seleniumClient():
 
-    def __init__(self, env: str, url:str) -> None:
+    def __init__(self, env: str, url:str, **kwargs) -> None:
         """
             Initalizes new selenium client. Client allows to download files from webpages. 
             
             env: local, dev or prd. Use local in case of local development in order to correctly create a chromedriver.
             url: url of the page where you want to download a file
+
+            provide download_dir kwarg in case you want to set a specifc directory for downloading files via selenium
         """
         self.env = env
         self.url = url
+        self.download_dir = kwargs.get('download_dir','/tmp/downloads')
         self.driver = self._create_driver()
-
+    
     def _set_chrome_options(self) -> None:
         """
             Sets chrome options for Selenium.
@@ -48,7 +52,7 @@ class seleniumClient():
         options.add_experimental_option(
             "prefs",
             {
-                "download.default_directory": "/tmp/downloads",
+                "download.default_directory": self.download_dir,
                 "download.prompt_for_download": False,
                 "directory_upgrade": True,
                 "safebrowsing.enabled": True,
@@ -57,40 +61,19 @@ class seleniumClient():
         return options
 
     def _create_driver(self):
-        logging.info("Creating chrome driver...")
-        try: 
-            if self.env == 'local':
-            # https://stackoverflow.com/questions/76724939/there-is-no-such-driver-by-url-https-chromedriver-storage-googleapis-com-lates
-            # https://stackoverflow.com/questions/76727774/selenium-webdriver-chrome-115-stopped-working?rq=1
-            # chrome iterates very quickly, hence chrome and chromedriver diverge. Hence, when running local, we can ensure match between both with below code
-                try:
-                    service = Service()
-                    driver = webdriver.Chrome(service=service, options=self._set_chrome_options())
-                    logging.info("Succesfully created chrome driver!!")
-                # in case our chromedriver on PATH is outdated, we remove it from PATH and selenium manager should automatically install a correct version in ~/.cache/selenium
-                # if the automated upgrade in ~/.cache/selenium is not working, we have to force delete chromedriver from there as well ( not operational currently)
-                except Exception as e:
-                    logging.info(f"Chromedriver is outdated. Deleting and trying again. {e}")
-                    if os.path.exists(FILE_PATH_LOCAL):
-                        os.remove(FILE_PATH_LOCAL)
-                        logging.info(f"Chromedriver {FILE_PATH_LOCAL} deleted.")
-                        service = Service()
-                        driver = webdriver.Chrome(service=service, options=self._set_chrome_options())
-                        logging.info("Succesfully created chrome driver")
-                    else:
-                        logging.critical(f"Chromedriver {FILE_PATH_LOCAL} does not exist.")
-                        sys.exit(1) 
+        options = self._set_chrome_options()
+        try:
+            if self.env == "local":
+                service = Service()  # Uses PATH
             else:
-                # chrome & driver are installed on docker image 
-                service = Service(FILE_PATH_DOCKER)
-                logging.info('Selenium Service created')
-                driver = webdriver.Chrome(service=service, options=self._set_chrome_options())
-                logging.info('Selenium Chrome webdriver succesfuly created')
-        except Exception as error: 
-            logging.error('Issue creating chrome driver. Exiting with status 1')
-            logging.error(error)
-            sys.exit(1)
-        return driver
+                service = Service("/usr/local/bin/chromedriver")
+            driver = webdriver.Chrome(service=service, options=options)
+            logging.info("ChromeDriver successfully created.")
+            return driver
+        except Exception as e:
+            logging.error(f"Error creating ChromeDriver: {e}")
+            raise
+
 
     def _create_local_dir(self, file_name:str, file_extension: str):
         """
