@@ -2,6 +2,7 @@ from office365.runtime.auth.user_credential import UserCredential
 from office365.sharepoint.client_context import ClientContext
 from office365.sharepoint.files.file import File 
 from office365.runtime.client_request_exception import ClientRequestException
+from office365.runtime.auth.client_credential import ClientCredential
 
 import os, io, logging, difflib, sys
 from datetime import datetime
@@ -11,6 +12,8 @@ from typing import List
 
 from pyveb.s3_client import s3Client
 from pyveb.custom_decorators import retry
+from pyveb.common import get_secret
+import json
 
 @dataclass
 class sharepointFile:
@@ -24,7 +27,7 @@ class sharepointFile:
 
 class sharepointClient():
 
-    def __init__(self, site_url ) -> None:
+    def __init__(self, site_url:str, aws_secret_name:str, aws_secret_region = 'eu-west-1' ) -> None:
         """
             Initiate a new sharepoint connection to site_url. In general the site_url is the toplevel 'sitepage' one level below the 'forms' or 'document libraries' you're interested in.
 
@@ -36,21 +39,42 @@ class sharepointClient():
 
             LOCAL:  Ensure you've setup SHAREPOINT_USER & SHAREPOINT_PASSWORD env variables ( for actual credentials see AWS arn:aws:secretsmanager:eu-west-1:308089413519:secret:office365/data@veb.be-hsgqh6 )
             DEV/PRD: ensure SHAREPOINT_USER & SHAREPOINT_PASSWORD  are injected into container via entrypoint.sh 
+
+            2025-09-02: new authentication mechanism required, usercredentials replaced with client credentials. Entra app is created. For each site we want to connect to, for both read and/or write, 
+            we need to allow this via microsoft Graph permissions, see readme within ingest_sharepoint pipeline for full details. 
          """
+        # try:
+        #     user=os.environ['SHAREPOINT_USER']
+        #     password = os.environ['SHAREPOINT_PASSWORD']
+        #     logging.info('Found sharepoint credentials environment variables')
+        # except KeyError as e:
+        #     logging.error('Couldnot find the required environment variables: SHAREPOINT_USER & SHAREPOINT_PASSWORD. Ensure they;re setup locally or injected into docker container via entrypoint.sh ')
+        # self.user_credentials = UserCredential(user, password)
+        # try:
+        #     self.ctx = ClientContext(site_url).with_credentials(self.user_credentials)
+        #     logging.info(f'Successfully established connection to sharepoint: {site_url}')
+        # except ClientRequestException as e:
+        #     logging.error(f'Issue establishing connection to sharepoint: {site_url}. Exiting...')
+        #     sys.exit(1) 
+        # return
         try:
-            user=os.environ['SHAREPOINT_USER']
-            password = os.environ['SHAREPOINT_PASSWORD']
-            logging.info('Found sharepoint credentials environment variables')
-        except KeyError as e:
-            logging.error('Couldnot find the required environment variables: SHAREPOINT_USER & SHAREPOINT_PASSWORD. Ensure they;re setup locally or injected into docker container via entrypoint.sh ')
-        self.user_credentials = UserCredential(user, password)
+            secret_details = json.loads(get_secret(aws_secret_name, aws_secret_region))
+            client_id = secret_details['client_id']
+            client_secret = secret_details['client_secret']
+
+        except KeyError:
+            logging.error(f'Issue loading Client ID and/or client Secret from aws secret {aws_secret_name}')
+            sys.exit(1)
         try:
-            self.ctx = ClientContext(site_url).with_credentials(self.user_credentials)
-            logging.info(f'Successfully established connection to sharepoint: {site_url}')
-        except ClientRequestException as e:
-            logging.error(f'Issue establishing connection to sharepoint: {site_url}. Exiting...')
-            sys.exit(1) 
+            self.client_credentials = ClientCredential(client_id, client_secret)
+            self.ctx = ClientContext(site_url).with_credentials(self.client_credentials)
+            logging.info(f'Successfully established connection to SharePoint: {site_url}')
+        except Exception as e:
+            logging.error(f'Issue establishing connection to SharePoint: {site_url} - {e}. Exiting')
+            sys.exit(1)
         return
+
+
 
     @staticmethod
     def parse_sharepoint_file_object(obj) -> sharepointFile : 
@@ -86,6 +110,8 @@ class sharepointClient():
             list of files as namedTuple(sharepointFile, [name, last_modified, creation_date, url, uri, version])
         """
         libraryRoot = self.ctx.web.get_folder_by_server_relative_url(folder_prefix)
+        print(libraryRoot)
+        print(libraryRoot.folders)
         self.ctx.load(libraryRoot).execute_query()
         files = libraryRoot.files
         self.ctx.load(files).execute_query()
