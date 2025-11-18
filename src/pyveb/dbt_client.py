@@ -685,10 +685,24 @@ class dbtClient():
 #     auth_type = 'api_key'
 # )
     
-
-
 # conns = dbt.get_connections()
 # print(f'found {len(conns)} number of connections')
-# print(conns)
+# # print(conns)
 
+# repos = dbt.get_repositories()
+# print(f'found {len(repos)} number of repositories')
+# # print(repos)
+
+# jobs = dbt.get_jobs()
+# print(f'found {len(jobs)} number of jobs')
+# # print(jobs)
+
+
+# projects = dbt.get_projects()
+# print(f'found {len(projects)} number of projects')
+# # print(jobs)
+
+# envs = dbt.get_environments()
+# print(f'found {len(envs)} number of envs')
+# # print(jobs)
 
