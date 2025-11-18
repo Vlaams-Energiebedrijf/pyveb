@@ -187,9 +187,6 @@ class dbtConnection:
     project_id: int
     conn_name: str
     conn_type: str
-    conn_host: str
-    conn_db: str
-    conn_port: int
     state: int
 
     def __hash__(self):
@@ -411,15 +408,12 @@ class dbtClient():
     @staticmethod
     def parse_dbt_connection(obj) -> dbtConnection:
         connection_id = obj['id']
-        project_id = obj['dbt_project_id']
+        project_id = obj['project_id']
         conn_name = obj['name']
         conn_type = obj['type']
-        conn_host = obj['hostname']
-        conn_db = obj['dbname']
-        conn_port = obj['port']
         state = obj['state']
 
-        parsed_obj = dbtConnection(connection_id, project_id, conn_name, conn_type, conn_host, conn_db, conn_port, state)
+        parsed_obj = dbtConnection(connection_id, project_id, conn_name, conn_type, state)
         return parsed_obj
 
     @staticmethod
@@ -488,8 +482,8 @@ class dbtClient():
                 if retry < retries:
                     sleep(retry_delay * (2 ** retry))
                 else:
-                    logging.error(f'Max retries reached. Exiting with exit code 1')
-                    sys.exit(1)
+                    logging.error(f'Max retries reached.')
+                    raise
             ## try again in case of request issues
             except requests.exceptions.RequestException as e:
                 logging.error(f"Error: Unable to make request to DBT API: {e}")
@@ -497,12 +491,12 @@ class dbtClient():
                 if retry < retries:
                     sleep(retry_delay * (2 ** retry))
                 else:
-                    logging.error(f'Max retries reached. Exiting with exit code 1')
-                    sys.exit(1)
+                    logging.error(f'Max retries reached')
+                    raise
             ## exit in case of non-200 status or invalid data
             except Exception as e:
-                logging.error(f'Failed to fetch valid data, exiting with error code 1: {e}')
-                sys.exit(1)
+                logging.error(f'Failed to fetch valid data: {e}')
+                raise
 
     def _make_paginated_request(self, endpoint: str, limit=100, **kwargs):
         all_records = []
@@ -602,9 +596,27 @@ class dbtClient():
         """
             Returns a list of all DBT connections as dbtConnection objects
         """
-        connections_data = self._make_paginated_request(self.DBT_ENDPOINTS['connections'])
-        return [self.parse_dbt_connection(conn) for conn in connections_data]
+        # connections_data = self._make_paginated_request(self.DBT_ENDPOINTS['connections'])
+        # return [self.parse_dbt_connection(conn) for conn in connections_data]
     
+        ## BUG 21087 - DBT has changed connections response in v3 and introduced breaking change in v2. 
+        ## 
+        projects = self.get_projects()
+        project_ids = [project.project_id for project in projects ]
+        print(project_ids)
+        connections = []
+        print(f"\n\n finished getting projects, starting for loop")
+        for pid in project_ids:
+            try:
+                conns = self._make_paginated_request(f"projects/{pid}/connections/")
+                conns_parsed = [self.parse_dbt_connection(conn) for conn in conns]
+                print(f'found parsed conns for {pid}')
+                connections.extend(conns_parsed)
+            except Exception as e:
+                logging.warning(e)
+                logging.warning(f'Found no connections for DBT project with ID: {pid}')
+        return connections
+
     def get_connection_by_id(self, connection_id):
         connections_data = self._make_request(f"{self.DBT_ENDPOINTS['connections']}/{connection_id}")
         return self.parse_dbt_connection(connections_data)
@@ -665,5 +677,21 @@ class dbtClient():
 
 
 
+## TESTING
+if __name__ == "__main__":
+
+    dbt = dbtClient(
+    "https://dh138.us1.dbt.com/api/", 
+    "v3",
+    38487,
+    env = 'prd',
+    auth_type = 'api_key'
+)
+    
+
+
+conns = dbt.get_connections()
+print(f'found {len(conns)} number of connections')
+print(conns)
 
 
