@@ -605,7 +605,7 @@ class dbtClient():
     
         ## BUG 21087 - DBT has changed connections response in v3 and introduced breaking change in v2. We need to add the project name from projects
         ## endpoint to the connections object in order to differentiate between dev and prd as we no longer have the port as part of connections endpoint response
-        
+
         projects = self.get_projects()
         project_ids_names = [(project.project_id, project.project_name) for project in projects ]
         connections = []
@@ -682,19 +682,19 @@ class dbtClient():
 
 
 ## TESTING
-if __name__ == "__main__":
+# if __name__ == "__main__":
 
-    dbt = dbtClient(
-    "https://dh138.us1.dbt.com/api/", 
-    "v3",
-    38487,
-    env = 'prd',
-    auth_type = 'api_key'
-)
+#     dbt = dbtClient(
+#     "https://dh138.us1.dbt.com/api/", 
+#     "v3",
+#     38487,
+#     env = 'prd',
+#     auth_type = 'api_key'
+# )
     
-conns = dbt.get_connections()
-print(f'found {len(conns)} number of connections')
-print(conns)
+# conns = dbt.get_connections()
+# print(f'found {len(conns)} number of connections')
+# print(conns)
 
 # repos = dbt.get_repositories()
 # print(f'found {len(repos)} number of repositories')
