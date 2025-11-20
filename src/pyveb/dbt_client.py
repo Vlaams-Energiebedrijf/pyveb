@@ -185,6 +185,7 @@ class dbtConnection:
     """
     connection_id: int
     project_id: int
+    project_name: str
     conn_name: str
     conn_type: str
     state: int
@@ -406,14 +407,17 @@ class dbtClient():
         return parsed_obj
 
     @staticmethod
-    def parse_dbt_connection(obj) -> dbtConnection:
+    def parse_dbt_connection(obj, project_name) -> dbtConnection:
+
+    ## BUG 
         connection_id = obj['id']
         project_id = obj['project_id']
+        project_name = project_name
         conn_name = obj['name']
         conn_type = obj['type']
         state = obj['state']
 
-        parsed_obj = dbtConnection(connection_id, project_id, conn_name, conn_type, state)
+        parsed_obj = dbtConnection(connection_id, project_id, project_name, conn_name, conn_type, state)
         return parsed_obj
 
     @staticmethod
@@ -599,19 +603,22 @@ class dbtClient():
         # connections_data = self._make_paginated_request(self.DBT_ENDPOINTS['connections'])
         # return [self.parse_dbt_connection(conn) for conn in connections_data]
     
-        ## BUG 21087 - DBT has changed connections response in v3 and introduced breaking change in v2. 
-        ## 
+        ## BUG 21087 - DBT has changed connections response in v3 and introduced breaking change in v2. We need to add the project name from projects
+        ## endpoint to the connections object in order to differentiate between dev and prd as we no longer have the port as part of connections endpoint response
+        
         projects = self.get_projects()
-        project_ids = [project.project_id for project in projects ]
+        project_ids_names = [(project.project_id, project.project_name) for project in projects ]
         connections = []
-        for pid in project_ids:
+        for item in project_ids_names:
+            project_id = item[0]
+            project_name = item[1]
             try:
-                conns = self._make_paginated_request(f"projects/{pid}/connections/")
-                conns_parsed = [self.parse_dbt_connection(conn) for conn in conns]
+                conns = self._make_paginated_request(f"projects/{project_id}/connections/")
+                conns_parsed = [self.parse_dbt_connection(conn, project_name ) for conn in conns]
                 connections.extend(conns_parsed)
             except Exception as e:
                 logging.warning(e)
-                logging.warning(f'Found no connections for DBT project with ID: {pid}')
+                logging.warning(f'Found no connections for DBT project with ID: {project_id}')
         return connections
 
     def get_connection_by_id(self, connection_id):
@@ -675,19 +682,19 @@ class dbtClient():
 
 
 ## TESTING
-# if __name__ == "__main__":
+if __name__ == "__main__":
 
-#     dbt = dbtClient(
-#     "https://dh138.us1.dbt.com/api/", 
-#     "v3",
-#     38487,
-#     env = 'prd',
-#     auth_type = 'api_key'
-# )
+    dbt = dbtClient(
+    "https://dh138.us1.dbt.com/api/", 
+    "v3",
+    38487,
+    env = 'prd',
+    auth_type = 'api_key'
+)
     
-# conns = dbt.get_connections()
-# print(f'found {len(conns)} number of connections')
-# # print(conns)
+conns = dbt.get_connections()
+print(f'found {len(conns)} number of connections')
+print(conns)
 
 # repos = dbt.get_repositories()
 # print(f'found {len(repos)} number of repositories')
