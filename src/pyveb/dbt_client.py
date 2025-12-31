@@ -682,20 +682,36 @@ class dbtClient():
 
 
 ## TESTING
-# if __name__ == "__main__":
+if __name__ == "__main__":
 
-#     dbt = dbtClient(
-#     "https://dh138.us1.dbt.com/api/", 
-#     "v3",
-#     38487,
-#     env = 'prd',
-#     auth_type = 'api_key'
-# )
+    dbt = dbtClient(
+    "https://dh138.us1.dbt.com/api/", 
+    "v3",
+    38487,
+    env = 'prd',
+    auth_type = 'api_key'
+)
     
 # conns = dbt.get_connections()
 # print(f'found {len(conns)} number of connections')
 # print(conns)
 
+connections = dbt.get_connections()
+redshift_dev_connections = []
+redshift_other = []
+for conn in connections:
+        if "dev" in conn.project_name.lower():
+                redshift_dev_connections.append(conn)
+        else:
+            redshift_other.append(conn)
+
+print(connections)
+print('\n\n')
+print(redshift_dev_connections)
+print('\n\n')
+print(redshift_other)
+
+    
 # repos = dbt.get_repositories()
 # print(f'found {len(repos)} number of repositories')
 # # print(repos)
