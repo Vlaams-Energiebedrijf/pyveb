@@ -106,7 +106,7 @@ class lynxClient():
         return nbr_cursors
 
     @retry(retries=5, error="Error executing stream_to_s3_parquet")
-    def stream_to_s3_parquet(self, query:str, batch_size:int, s3_bucket:str, s3_prefix:str, s3_filename:str, datetime_timeunit=None, **kwargs) -> None:
+    def stream_to_s3_parquet(self, query:str, batch_size:int, s3_bucket:str, s3_prefix:str, s3_filename:str, datetime_timeunit='us', **kwargs) -> None:
         """
             Streams the results of a sql query to parquet files on s3 with 'batch_size' nbr of rows per file. 
             Output files have the following key:
@@ -142,12 +142,33 @@ class lynxClient():
     def _df_to_parquet_s3(self, df:pd.DataFrame, s3_bucket: str, s3_prefix: str, file_name:str, datetime_timeunit:str) -> None:
         parquet_buffer = BytesIO()
         if datetime_timeunit:
+            if datetime_timeunit not in {"us", "ms"}:
+                raise ValueError(f"Unsupported datetime_timeunit: {datetime_timeunit} (expected 'us' or 'ms')")
             # Convert all datetime columns to microsecond precision
-            for col in df.select_dtypes(include=['datetime']):
-                df[col] = df[col].dt.floor(datetime_timeunit)  # Ensure microseconds precision
-            df.to_parquet(parquet_buffer, index=False, allow_truncated_timestamps=True, coerce_timestamps=datetime_timeunit)  # Explicitly enforce microseconds
+            target_dtype = f"datetime64[{datetime_timeunit}]"
+            for col in df.columns:
+                s = df[col]
+                if pd.api.types.is_datetime64_any_dtype(s):
+                    # If tz-aware, preserve the instant and drop tz (Parquet/Spark are timezone-naive)
+                    if pd.api.types.is_datetime64tz_dtype(s):
+                        s = s.dt.tz_convert(None)
+                    # Force the dtype itself to the requested resolution
+                    df[col] = s.astype(target_dtype)
+
+            # Guardrail: ensure no nanos remain
+            bad_nanos = [c for c, t in df.dtypes.items() if "datetime64[ns" in str(t)]
+            if bad_nanos:
+                raise ValueError(f"Found nanosecond timestamp columns after coercion: {bad_nanos}")
+
+            df.to_parquet(
+                parquet_buffer,
+                index=False,
+                allow_truncated_timestamps=True,
+                engine="pyarrow",
+                coerce_timestamps=datetime_timeunit
+            )
         else:
-            df.to_parquet(parquet_buffer, index=False, allow_truncated_timestamps=True)
+            df.to_parquet(parquet_buffer, index=False, engine="pyarrow", allow_truncated_timestamps=True)
         s3 = boto3.resource('s3')
         timestamp = round(time(), 4)
         s3_key = f"{s3_prefix}{timestamp}_{file_name}.parquet"
