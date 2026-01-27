@@ -185,13 +185,22 @@ class s3Client():
             sys.exit(1)
         return
 
-    def df_to_parquet(self, df: pd.DataFrame, s3_prefix:str, s3_file_name:str, add_timestamp:bool = True ) -> None:
+    def df_to_parquet(
+            self,
+            df: pd.DataFrame,
+            s3_prefix:str,
+            s3_file_name:str,
+            add_timestamp:bool = True,
+            timestamps_as_micros: bool = True,
+    ) -> None:
         """
             ARGUMENTS
                 df: pandas dataframe
                 s3_prefix: target_folder/target_subfolder
                 s3_file_name: name of the file without extension.  
                 add_timestamp: if True, s3_file_name will be prefxied with a timestamp
+                timestamps_as_micros: if True, coerce all datetime-like columns to datetime64[us] (instead of
+                                    (default) datetime64[ns])
 
             RETURNS
                 None
@@ -200,8 +209,36 @@ class s3Client():
                 DF will be read into memory and stored in S3 as parquet under key s3_prefix/1562388.0020_s3_file_name.parquet
         """
         logging.info('Starting upload')
+
+        if timestamps_as_micros:
+            df = df.copy()
+            for col in df.columns:
+                s = df[col]
+                if pd.api.types.is_datetime64_any_dtype(s):
+                    if pd.api.types.is_datetime64tz_dtype(s):
+                        # Convert tz-aware -> naive timestamps (will happen in parquet anyway)
+                        s = s.dt.tz_convert(None)
+
+                    # Force microsecond resolution
+                    df[col] = s.astype("datetime64[us]")
+                    continue
+
+            # no nanoseconds timestamps should remain
+            bad = [c for c, t in df.dtypes.items() if "datetime64[ns" in str(t)]
+            if bad:
+                raise ValueError(f"Found nanosecond timestamp columns after coercion: {bad}")
+
         parquet_buffer = BytesIO()
-        df.to_parquet(parquet_buffer, index=False, allow_truncated_timestamps=True)
+        if timestamps_as_micros:
+            df.to_parquet(
+                parquet_buffer,
+                index=False,
+                engine="pyarrow",
+                allow_truncated_timestamps=True,
+                coerce_timestamps="us"
+            )
+        else:
+            df.to_parquet(parquet_buffer, index=False, engine="pyarrow", allow_truncated_timestamps=True)
         if add_timestamp:
             timestamp = round(time.time(), 4)
             s3_key = f'{s3_prefix}{timestamp}_{s3_file_name}.parquet'
