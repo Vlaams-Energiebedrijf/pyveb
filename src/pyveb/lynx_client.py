@@ -144,27 +144,6 @@ class lynxClient():
         if datetime_timeunit:
             if datetime_timeunit not in {"us", "ms"}:
                 raise ValueError(f"Unsupported datetime_timeunit: {datetime_timeunit} (expected 'us' or 'ms')")
-            # Convert all datetime columns to microsecond precision
-            target_dtype = f"datetime64[{datetime_timeunit}]"
-            for col in df.columns:
-                s = df[col]
-                if (
-                    pd.api.types.is_datetime64_any_dtype(s)
-                    or pd.api.types.is_datetime64tz_dtype(s)
-                    or "timestamp[" in str(s.dtype)
-                    or str(s.dtype).startswith("datetime64[")
-                ):
-                    s = pd.to_datetime(s)
-                    # If tz-aware, preserve the instant and drop tz (Parquet/Spark are timezone-naive)
-                    if pd.api.types.is_datetime64tz_dtype(s):
-                        s = s.dt.tz_convert(None)
-                    # Force the dtype itself to the requested resolution
-                    df[col] = pd.Series(s.to_numpy(dtype=target_dtype), index=df.index)
-
-            # Guardrail: ensure no nanos remain
-            bad_nanos = [c for c, t in df.dtypes.items() if "datetime64[ns" in str(t)]
-            if bad_nanos:
-                raise ValueError(f"Found nanosecond timestamp columns after coercion: {bad_nanos}")
 
             df.to_parquet(
                 parquet_buffer,

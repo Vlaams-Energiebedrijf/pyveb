@@ -209,31 +209,6 @@ class s3Client():
                 DF will be read into memory and stored in S3 as parquet under key s3_prefix/1562388.0020_s3_file_name.parquet
         """
         logging.info('Starting upload')
-
-        if timestamps_as_micros:
-            df = df.copy()
-            for col in df.columns:
-                s = df[col]
-                if (
-                    pd.api.types.is_datetime64_any_dtype(s)
-                    or pd.api.types.is_datetime64tz_dtype(s)
-                    or "timestamp[" in str(s.dtype)
-                    or str(s.dtype).startswith("datetime64[")
-                ):
-                    s = pd.to_datetime(s)
-                    if pd.api.types.is_datetime64tz_dtype(s):
-                        # Convert tz-aware -> naive timestamps (will happen in parquet anyway)
-                        s = s.dt.tz_convert(None)
-
-                    # Force microsecond resolution
-                    df[col] = pd.Series(s.to_numpy(dtype="datetime64[us]"), index=df.index)
-                    continue
-
-            # no nanoseconds timestamps should remain
-            bad = [c for c, t in df.dtypes.items() if "datetime64[ns" in str(t)]
-            if bad:
-                raise ValueError(f"Found nanosecond timestamp columns after coercion: {bad}")
-
         parquet_buffer = BytesIO()
         if timestamps_as_micros:
             df.to_parquet(
