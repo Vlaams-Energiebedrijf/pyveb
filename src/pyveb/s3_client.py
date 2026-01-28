@@ -226,7 +226,7 @@ class s3Client():
                         s = s.dt.tz_convert(None)
 
                     # Force microsecond resolution
-                    df[col] = s.astype("datetime64[us]")
+                    df[col] = pd.Series(s.to_numpy(dtype="datetime64[us]"), index=df.index)
                     continue
 
             # no nanoseconds timestamps should remain

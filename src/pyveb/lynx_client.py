@@ -159,7 +159,7 @@ class lynxClient():
                     if pd.api.types.is_datetime64tz_dtype(s):
                         s = s.dt.tz_convert(None)
                     # Force the dtype itself to the requested resolution
-                    df[col] = s.astype(target_dtype)
+                    df[col] = pd.Series(s.to_numpy(dtype=target_dtype), index=df.index)
 
             # Guardrail: ensure no nanos remain
             bad_nanos = [c for c, t in df.dtypes.items() if "datetime64[ns" in str(t)]
