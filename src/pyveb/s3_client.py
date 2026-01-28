@@ -214,7 +214,13 @@ class s3Client():
             df = df.copy()
             for col in df.columns:
                 s = df[col]
-                if pd.api.types.is_datetime64_any_dtype(s):
+                if (
+                    pd.api.types.is_datetime64_any_dtype(s)
+                    or pd.api.types.is_datetime64tz_dtype(s)
+                    or "timestamp[" in str(s.dtype)
+                    or str(s.dtype).startswith("datetime64[")
+                ):
+                    s = pd.to_datetime(s)
                     if pd.api.types.is_datetime64tz_dtype(s):
                         # Convert tz-aware -> naive timestamps (will happen in parquet anyway)
                         s = s.dt.tz_convert(None)

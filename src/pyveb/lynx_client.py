@@ -148,7 +148,13 @@ class lynxClient():
             target_dtype = f"datetime64[{datetime_timeunit}]"
             for col in df.columns:
                 s = df[col]
-                if pd.api.types.is_datetime64_any_dtype(s):
+                if (
+                    pd.api.types.is_datetime64_any_dtype(s)
+                    or pd.api.types.is_datetime64tz_dtype(s)
+                    or "timestamp[" in str(s.dtype)
+                    or str(s.dtype).startswith("datetime64[")
+                ):
+                    s = pd.to_datetime(s)
                     # If tz-aware, preserve the instant and drop tz (Parquet/Spark are timezone-naive)
                     if pd.api.types.is_datetime64tz_dtype(s):
                         s = s.dt.tz_convert(None)
