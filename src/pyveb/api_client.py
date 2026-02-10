@@ -101,7 +101,7 @@ class basicAPI():
 
 class CogeniusAPI:
 
-    def __init__(self, endpoint):
+    def __init__(self, endpoint, credentials=None):
         """
             Instantiation create a session object to make HTTP requests to a specified cogenius endpoint. Once a CogeniusAPI object is created, we can call its fetch method
             to make individual HTTP requests
@@ -109,14 +109,18 @@ class CogeniusAPI:
             See https://api-veb.lynx.energy/swagger/ui/index#!/ for available endpoints. Ensure that the endpoint prefix and API key are set up in your env. 
 
         """
-        try:
-            COGENIUS_API_KEY=os.environ['COGENIUS_API_KEY']
-            COGENIUS_API_ENDPOINT = os.environ['COGENIUS_API_ENDPOINT']
-            logging.info("Found cogenius credentials in os.environ")
-        except Exception as e:
-            logging.error("No cogenius credentials found in os.environ. Exiting...")
-            logging.error(e)
-            sys.exit(1)
+        if credentials:
+            COGENIUS_API_KEY=credentials['COGENIUS_API_KEY']
+            COGENIUS_API_ENDPOINT = credentials['COGENIUS_API_ENDPOINT']
+        else:
+            try:
+                COGENIUS_API_KEY=os.environ['COGENIUS_API_KEY']
+                COGENIUS_API_ENDPOINT = os.environ['COGENIUS_API_ENDPOINT']
+                logging.info("Found cogenius credentials in os.environ")
+            except Exception as e:
+                logging.error("No cogenius credentials found in os.environ. Exiting...")
+                logging.error(e)
+                sys.exit(1)
         self.endpoint_url = f'{COGENIUS_API_ENDPOINT}{endpoint}'
         logging.info(f'Using endpoing {self.endpoint_url}')
         self.headers = {
