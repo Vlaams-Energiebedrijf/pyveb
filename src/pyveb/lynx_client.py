@@ -20,36 +20,43 @@ class lynxClient():
         It is advised to call 'close_connection' if you no longer need the class instance. 
     """
 
-    def __init__(self) -> str:
+    def __init__(self, credentials=None) -> str:
         self._connection_instance = None
-        self._connection_instance = self._connect()
+        self._connection_instance = self._connect(credentials)
         logging.info('successfully created connection')
 
-    def _create_conn_string(self) -> str:
+    def _create_conn_string(self, credentials) -> str:
         """
             Function to create a connection string for SQL server
             Environment variables are injected in the container environment via entrypoint.sh at runtime
             For local development, we fetch environment variables from local enviroment. Make sure they are set up. 
             Lynx only has 1 environment, hence no need to pass ENV.
         """
-        try: 
-            server_raw = os.environ['LYNX_SERVER']
-            port = os.environ['LYNX_PORT']
-            database = os.environ['LYNX_DATABASE']
-            username = os.environ['LYNX_USERNAME']
-            password = os.environ['LYNX_PASSWORD']
-            server = f'{server_raw},{port}'
-            logging.info("Fetched lynx credentials from environment variables")
-        except Exception as e:
-            logging.error("Issue fetching lynx credentials from environment variables. Exiting...")
-            logging.error(e)
-            sys.exit(1)
+        if credentials:
+            server_raw = credentials['server']
+            port = credentials['port']
+            database = credentials['database']
+            username = credentials['username']
+            password = credentials['password']
+        else:
+            try:
+                server_raw = os.environ['LYNX_SERVER']
+                port = os.environ['LYNX_PORT']
+                database = os.environ['LYNX_DATABASE']
+                username = os.environ['LYNX_USERNAME']
+                password = os.environ['LYNX_PASSWORD']
+                logging.info("Fetched lynx credentials from environment variables")
+            except Exception as e:
+                logging.error("Issue fetching lynx credentials from environment variables. Exiting...")
+                logging.error(e)
+                sys.exit(1)
+        server = f'{server_raw},{port}'
         connection_string = 'DRIVER={ODBC Driver 17 for SQL Server};SERVER=' + server + ';DATABASE=' + database + ';UID=' + username + ';PWD=' + password
         return connection_string
 
     @retry(retries=5, error="Error creating connection to SQL server")
-    def _connect(self, **kwargs) -> pyodbc.Connection:
-        return pyodbc.connect(self._create_conn_string())
+    def _connect(self, credentials, **kwargs) -> pyodbc.Connection:
+        return pyodbc.connect(self._create_conn_string(credentials))
 
     @retry(retries=3, error="Error creating cursor")
     def _create_cursor(self, **kwargs) -> pyodbc.Cursor:
