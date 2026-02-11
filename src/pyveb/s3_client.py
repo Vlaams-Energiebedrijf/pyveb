@@ -306,21 +306,26 @@ class s3Client():
 
 class externalS3Client():
 
-    def __init__(self, aws_access_key_id_name:str, aws_secret_access_key_name:str , ext_bucket:str):
+    def __init__(self, ext_bucket:str, aws_access_key_id_name=None, aws_secret_access_key_name=None, credentials=None):
         """ 
             ARGS
+                ext_bucket: external bucket name without 's3://" eg, ext_bucket_name
                 aws_access_key_id_name: environment variable holding aws_access_key_id
                 aws_secret_access_key_name: environment variable holding aws_secret_access_key_name
-                ext_bucket: external bucket name without 's3://" eg, ext_bucket_name
+                credentials: the aws_access_key_id and aws_secret_access_key in a dict
         
         """
         self.bucket = ext_bucket
-        try:
-            aws_access_key_id=os.environ[aws_access_key_id_name]
-            aws_secret_access_key = os.environ[aws_secret_access_key_name]
-        except Exception: 
-            logging.error('AWS credentials for external account not found. Exiting...')
-            sys.exit(1)
+        if credentials:
+            aws_access_key_id = credentials['AIV_AWS_ACCESS_KEY_ID']
+            aws_secret_access_key = credentials['AIV_AWS_SECRET_ACCESS_KEY']
+        else:
+            try:
+                aws_access_key_id=os.environ[aws_access_key_id_name]
+                aws_secret_access_key = os.environ[aws_secret_access_key_name]
+            except Exception:
+                logging.error('AWS credentials for external account not found. Exiting...')
+                sys.exit(1)
 
         session_ext = boto3.Session(
                 aws_access_key_id=aws_access_key_id,
