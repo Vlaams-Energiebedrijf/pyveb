@@ -14,7 +14,7 @@ import time
 import json
 import pandas as pd
 
-cores = psutil.cpu_count(logical = False)
+cores = psutil.cpu_count(logical=False) or 1
 
 class dotdict(dict):
     """dot.notation access to dictionary attributes"""

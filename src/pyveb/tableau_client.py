@@ -66,7 +66,7 @@ class tableauRestClient:
         return response["credentials"]["token"], response["credentials"]["site"]["id"]
 
     def retrieve_all_workbooks(self) -> List[Dict[str, Any]]:
-        endpoint = f'api/{self.tableau_version}/sites/{self.site_id}/workbooks?pageSize=100&pageNumner=1'
+        endpoint = f'api/{self.tableau_version}/sites/{self.site_id}/workbooks?pageSize=100&pageNumber=1'
         url = f'{self.tableau_url}/{endpoint}'
         response = self.session.get(url)
         response.raise_for_status()
@@ -99,7 +99,7 @@ class tableauRestClient:
         """
             returns a dictionary of all user items {name, site_role} excluding guests
         """
-        endpoint = f'api/{self.tableau_version}/sites/{self.site_id}/users?pageSize=100&pageNumner=1'
+        endpoint = f'api/{self.tableau_version}/sites/{self.site_id}/users?pageSize=100&pageNumber=1'
         url = f'{self.tableau_url}/{endpoint}'
         response = self.session.get(url)
         all_users = []
@@ -139,9 +139,10 @@ class tableauRestClient:
         endpoint = f'api/{self.tableau_version}/sites'
         url = f'{self.tableau_url}/{endpoint}'
         response = self.session.get(url)
+        response.raise_for_status()
         return json.loads(response.content)
         
-    def retrieve_metadata(self, graphql_query, variables=None) -> Dict:
+    def retrieve_metadata(self, graphql_query, variables=None) -> requests.Response:
 
         metadata_url = f'{self.tableau_url}/api/metadata/graphql'
 

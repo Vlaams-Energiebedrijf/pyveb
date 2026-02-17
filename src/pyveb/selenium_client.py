@@ -29,7 +29,7 @@ class seleniumClient():
         self.download_dir = kwargs.get('download_dir','/tmp/downloads')
         self.driver = self._create_driver()
     
-    def _set_chrome_options(self) -> None:
+    def _set_chrome_options(self) -> Options:
         """
             Sets chrome options for Selenium.
             Chrome options for headless browser is enabled.
@@ -122,8 +122,7 @@ class seleniumClient():
                 self.driver.get(self.url)
                 element = self.driver.find_element(getattr(By, element_type), element_name)
                 file_url = element.get_attribute('href')
-                daily_file = urllib.request.URLopener()
-                daily_file.retrieve(file_url, local_file )
+                urllib.request.urlretrieve(file_url, local_file)
                 break
             except Exception as e:
                 if i < 2:

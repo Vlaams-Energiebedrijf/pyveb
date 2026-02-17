@@ -20,7 +20,7 @@ class lynxClient():
         It is advised to call 'close_connection' if you no longer need the class instance. 
     """
 
-    def __init__(self, credentials=None) -> str:
+    def __init__(self, credentials=None) -> None:
         self._connection_instance = None
         self._connection_instance = self._connect(credentials)
         logging.info('successfully created connection')
@@ -103,7 +103,7 @@ class lynxClient():
         columns = [column[0] for column in cursor.description]
         cursor.close()
         df = pd.DataFrame.from_records(rows, columns=columns)
-        logging.info(df)
+        logging.info(df.head(5))
         return df
 
     @retry(retries=3, error="Error executing get_max_cursors ")

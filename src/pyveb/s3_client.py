@@ -2,7 +2,7 @@ import boto3
 from urllib.parse import unquote
 import os, sys, time
 import logging
-from io import BytesIO
+from io import StringIO, BytesIO
 import pandas as pd
 import json
 
@@ -95,7 +95,7 @@ class s3Client():
         logging.info(f'Succesfully delete all objects for prefix {s3_prefix}')
         return
     
-    def _prefix_exist_and_not_empty(self, s3_prefix:str) -> bool:
+    def _prefix_exist_and_not_empty(self, s3_prefix:str) -> (bool, bool):
         '''
             S3_prefix should exist. 
             S3_prefix should not be empty.
