@@ -246,7 +246,7 @@ def string_to_datetime(x: str) -> datetime:
         except ValueError:
             return None  # Return None if no format matches
 
-def parse_args() -> Dict:
+def parse_args():
     """
         Parses command line arguments and returns dictionary of arguments which can be accessed via dot notation
 
