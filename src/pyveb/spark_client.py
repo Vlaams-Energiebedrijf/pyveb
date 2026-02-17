@@ -190,8 +190,7 @@ class sparkClient():
             united_df = reduce(self._unite_dfs, list_of_dfs)
             logging.info("Succesfully read all files in a spark DF")
         except Exception as e:
-            logging.error("Issue reading parquet files and unioning them in spark DF. Raising SparkException")
-            logging.error(e)
+            logging.exception("Issue reading parquet files and unioning them in spark DF")
             raise SparkException('read_multiple_parquet_files()') from e
         return united_df
 
@@ -421,7 +420,7 @@ class sparkClient():
 
     @staticmethod
     def _unite_dfs(df1: SparkDataFrame, df2: SparkDataFrame) -> SparkDataFrame:
-        return df1.unionByName(df2)
+        return df1.unionByName(df2, allowMissingColumns=True)
 
     @staticmethod
     def reindex_cols(df: SparkDataFrame, columns_order: List[str]) -> SparkDataFrame:
