@@ -245,7 +245,7 @@ class s3Client():
                 Dataframe will be read into memory and stored in S3 as parquet under key s3_prefix/1562388.0020_s3_file_name.csv
         """
         timestamp = round(time.time(), 4)
-        csv_buffer = StringIO()
+        csv_buffer = BytesIO()
         df.to_csv(csv_buffer, index=False, sep=delimiter)
         s3_key = f'{s3_prefix}{timestamp}_{s3_file_name}.csv'
         csv_buffer.seek(0)
