@@ -49,7 +49,7 @@ class tfClient():
         datetime_df = df.select_dtypes(include="datetime")
         datetime_cols = datetime_df.columns
         # replace cogenius NULL with datetimelike string in order to convert via .dt accessor
-        if datetime_cols:
+        if len(datetime_cols) > 0:
             df[datetime_cols] = df[datetime_cols].replace({None: '1111-01-01 00:00:00.000'})
             df[datetime_cols] = df[datetime_cols].apply(pd.to_datetime, format='%Y-%m-%d %H:%M:%S', errors='coerce')
         return df
@@ -72,7 +72,7 @@ class tfClient():
         if '.csv' in file_name:
             file_name = file_name.replace('.csv', '.parquet')
         if '.xlsx' in file_name:
-            file_name = file_name.replace('.xslx', '.parquet')
+            file_name = file_name.replace('.xlsx', '.parquet')
         if '.xls' in file_name:
             file_name = file_name.replace('.xls', '.parquet')
         if '.parquet' in file_name:

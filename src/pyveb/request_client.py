@@ -54,5 +54,6 @@ class basicClient():
             f.write(response.content)
         workbook = xlrd.open_workbook(temp_location, ignore_workbook_corruption=True)
         df = pd.read_excel(workbook)
+        # df = pd.read_excel(temp_location, engine="xlrd")  replace if two lines above gives issues with pandas 2/3
         return temp_location, df
 

@@ -2,7 +2,7 @@ import boto3
 from urllib.parse import unquote
 import os, sys, time
 import logging
-from io import BytesIO
+from io import StringIO, BytesIO
 import pandas as pd
 import json
 
@@ -95,7 +95,7 @@ class s3Client():
         logging.info(f'Succesfully delete all objects for prefix {s3_prefix}')
         return
     
-    def _prefix_exist_and_not_empty(self, s3_prefix:str) -> bool:
+    def _prefix_exist_and_not_empty(self, s3_prefix:str) -> (bool, bool):
         '''
             S3_prefix should exist. 
             S3_prefix should not be empty.
@@ -245,7 +245,7 @@ class s3Client():
                 Dataframe will be read into memory and stored in S3 as parquet under key s3_prefix/1562388.0020_s3_file_name.csv
         """
         timestamp = round(time.time(), 4)
-        csv_buffer = BytesIO()
+        csv_buffer = StringIO()
         df.to_csv(csv_buffer, index=False, sep=delimiter)
         s3_key = f'{s3_prefix}{timestamp}_{s3_file_name}.csv'
         csv_buffer.seek(0)

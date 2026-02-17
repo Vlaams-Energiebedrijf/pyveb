@@ -44,12 +44,8 @@ class sparkClient():
         # https://stackoverflow.com/questions/64808568/boto3-session-get-credentials-is-not-returning-token#:~:text=The%20cause%20is%20that%20you,or%20an%20EC2%20instance%20role.
         # https://www.websitebuilderinsider.com/how-do-i-get-my-aws-session-token/
         session = boto3.Session()
-        credentials = session.get_credentials()
-        credentials = credentials.get_frozen_credentials()
-        access_key = credentials[0]
-        secret_key = credentials[1]
-        session_token = credentials[2]
-        return access_key, secret_key, session_token
+        frozen = session.get_credentials().get_frozen_credentials()
+        return frozen.access_key, frozen.secret_key, frozen.token
 
     def _create_spark_session(self):
         """
@@ -71,11 +67,10 @@ class sparkClient():
                             .appName(f'Spark_{str(uuid.uuid4())}') \
                             .config('spark.sql.codegen.wholeStage', 'false') \
                             .config("spark.sql.session.timeZone", "UTC") \
-                            .config('spark.jars.packages', 'org.apache.hadoop:hadoop-aws:3.2.0')\
                             .config("spark.sql.legacy.parquet.datetimeRebaseModeInRead", "LEGACY") \
                             .config("spark.sql.parquet.int96RebaseModeInWrite", "LEGACY")\
-                            .config("fs.s3a.aws.credentials.provider","com.amazonaws.auth.profile.ProfileCredentialsProvider")\
-                            .config("fs.s3a.experimental.input.fadvise", "sequential")\
+                            .config("spark.hadoop.fs.s3a.aws.credentials.provider","com.amazonaws.auth.profile.ProfileCredentialsProvider")\
+                            .config("spark.hadoop.fs.s3a.experimental.input.fadvise", "sequential")\
                             .getOrCreate()
 
             else:
@@ -85,14 +80,13 @@ class sparkClient():
                             .appName(f'Spark_{str(uuid.uuid4())}') \
                             .config('spark.sql.codegen.wholeStage', 'false') \
                             .config("spark.sql.session.timeZone", "UTC") \
-                            .config('spark.jars.packages', 'org.apache.hadoop:hadoop-aws:3.2.0')\
                             .config("spark.sql.legacy.parquet.datetimeRebaseModeInRead", "LEGACY") \
                             .config("spark.sql.parquet.int96RebaseModeInWrite", "LEGACY")\
-                            .config('fs.s3a.aws.credentials.provider', 'org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider')\
-                            .config("fs.s3a.experimental.input.fadvise", "sequential")\
-                            .config('fs.s3a.access.key', access_key)\
-                            .config('fs.s3a.secret.key', secret_key)\
-                            .config('fs.s3a.session.token', session_token)\
+                            .config('spark.hadoop.fs.s3a.aws.credentials.provider', 'org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider')\
+                            .config("spark.hadoop.fs.s3a.experimental.input.fadvise", "sequential")\
+                            .config('spark.hadoop.fs.s3a.access.key', access_key)\
+                            .config('spark.hadoop.fs.s3a.secret.key', secret_key)\
+                            .config('spark.hadoop.fs.s3a.session.token', session_token)\
                             .getOrCreate()  
 
             spark.sparkContext.setLogLevel("ERROR")
@@ -521,7 +515,7 @@ class sparkClient():
         temp_col_name = str(uuid.uuid4())
         if col_type == 'string':
             # https://stackoverflow.com/questions/57066797/pyspark-dataframe-split-column-with-multiple-values-into-rows
-            df = df.withColumn(temp_col_name, F.explode_outer( F.split( F.regexp_extract( F.regexp_replace(F.col(explode_col), "\s", ""), "^\[(.*)\]$", 1), ",") ) )
+            df = df.withColumn(temp_col_name, F.explode_outer( F.split( F.regexp_extract( F.regexp_replace(F.col(explode_col), r"\s", ""), r"^\[(.*)\]$", 1), ",") ) )
             df = df.drop(explode_col)
             df = df.withColumnRenamed(temp_col_name, explode_col)
         if 'array' in col_type:
