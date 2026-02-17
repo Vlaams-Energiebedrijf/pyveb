@@ -67,9 +67,10 @@ class sparkClient():
                             .appName(f'Spark_{str(uuid.uuid4())}') \
                             .config('spark.sql.codegen.wholeStage', 'false') \
                             .config("spark.sql.session.timeZone", "UTC") \
+                            .config("spark.jars.packages", "org.apache.hadoop:hadoop-aws:3.4.2") \
                             .config("spark.sql.legacy.parquet.datetimeRebaseModeInRead", "LEGACY") \
                             .config("spark.sql.parquet.int96RebaseModeInWrite", "LEGACY")\
-                            .config("spark.hadoop.fs.s3a.aws.credentials.provider","com.amazonaws.auth.profile.ProfileCredentialsProvider")\
+                            .config("spark.hadoop.fs.s3a.aws.credentials.provider","software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider")\
                             .config("spark.hadoop.fs.s3a.experimental.input.fadvise", "sequential")\
                             .getOrCreate()
 
@@ -80,6 +81,7 @@ class sparkClient():
                             .appName(f'Spark_{str(uuid.uuid4())}') \
                             .config('spark.sql.codegen.wholeStage', 'false') \
                             .config("spark.sql.session.timeZone", "UTC") \
+                            .config("spark.jars.packages", "org.apache.hadoop:hadoop-aws:3.4.2") \
                             .config("spark.sql.legacy.parquet.datetimeRebaseModeInRead", "LEGACY") \
                             .config("spark.sql.parquet.int96RebaseModeInWrite", "LEGACY")\
                             .config('spark.hadoop.fs.s3a.aws.credentials.provider', 'org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider')\
