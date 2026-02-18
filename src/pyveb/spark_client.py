@@ -244,13 +244,15 @@ class sparkClient():
             for field in schema.fields:
                 col_name = field.name
                 data_type = field.dataType
-                c = F.col(col_name)
 
-                # convert empty strings into nulls to not break casting
-                if isinstance(data_type, (TimestampType, DateType)):
-                    c = F.when(F.trim(c) == "", F.lit(None)).otherwise(c)
-
-                df = df.withColumn(col_name, c.cast(data_type))
+                # keep spark 3 logic, invalid timestamp data -> null
+                if isinstance(data_type, TimestampType):
+                    df = df.withColumn(
+                        col_name,
+                        F.expr(f"try_cast(`{col_name}` as {data_type.simpleString()})")
+                    )
+                else:
+                    df = df.withColumn(col_name, F.col(col_name).cast(data_type))
             # df = self.spark.createDataFrame(df.collect(), schema = schema)
             logging.info("Succesfully applied schema")
 
