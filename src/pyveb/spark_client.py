@@ -15,7 +15,8 @@ from pyspark.sql import SparkSession
 from pyspark.sql import DataFrame as SparkDataFrame
 import pyspark.sql.functions as F
 from pyspark.sql.functions import udf
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType, BooleanType, TimestampType, DoubleType, DecimalType, ArrayType, BinaryType, LongType
+from pyspark.sql.types import (StructType, StructField, StringType, IntegerType, BooleanType, TimestampType, DoubleType,
+                               DecimalType, ArrayType, BinaryType, LongType, DateType)
 import boto3
 
 from . import s3_client
@@ -243,7 +244,13 @@ class sparkClient():
             for field in schema.fields:
                 col_name = field.name
                 data_type = field.dataType
-                df = df.withColumn(col_name, F.col(col_name).cast(data_type))
+                c = F.col(col_name)
+
+                # convert empty strings into nulls to not break casting
+                if isinstance(data_type, (TimestampType, DateType)):
+                    c = F.when(F.trim(c) == "", F.lit(None)).otherwise(c)
+
+                df = df.withColumn(col_name, c.cast(data_type))
             # df = self.spark.createDataFrame(df.collect(), schema = schema)
             logging.info("Succesfully applied schema")
 
