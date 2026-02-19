@@ -468,9 +468,16 @@ class sparkClient():
 
             Additionally, when a column only contains spaces, it is replaced by NULL. 
         """
-        for col in df.columns:
-            df = df.withColumn(col, F.when(F.col(col) == 'NaN', None).otherwise(F.col(col)))
-            df = df.withColumn(col, F.when(F.trim(F.col(col)) == '', None).otherwise(F.col(col)))
+        for field in df.schema.fields:
+            if isinstance(field.dataType, StringType):
+                c = field.name
+                df = df.withColumn(
+                    c,
+                    F.when(
+                        F.lower(F.trim(F.col(c))).isin("nan", "null", ""),
+                        F.lit(None)
+                    ).otherwise(F.col(c))
+                )
         return df
     
     @staticmethod
