@@ -246,7 +246,7 @@ class sparkClient():
                 data_type = field.dataType
 
                 # keep spark 3 logic, invalid timestamp data -> null
-                if isinstance(data_type, TimestampType):
+                if isinstance(data_type, (TimestampType, BooleanType)):
                     df = df.withColumn(
                         col_name,
                         F.expr(f"try_cast(`{col_name}` as {data_type.simpleString()})")
@@ -481,7 +481,7 @@ class sparkClient():
         return df
     
     @staticmethod
-    def flatten_struct(df: SparkDataFrame, flatten_col: StructType) -> SparkDataFrame:
+    def flatten_struct(df: SparkDataFrame, flatten_col: str) -> SparkDataFrame:
         """     
             Method to flatten a StructType
         """
