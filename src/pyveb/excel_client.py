@@ -50,6 +50,9 @@ class DefaultExcel(ExcelGenerator):
         # There are a lot of NaN columns in the DF, excel displays this as an error for numerical columns, so we fill it with 0 instead.
         offset = 1
         magic_num = -0xDEADBEEF
+        # Pandas 2 gives certain columns dtype 'category', this breaks 'fillna'
+        cat_cols = self.df.select_dtypes(include=["category"]).columns
+        self.df[cat_cols] = self.df[cat_cols].astype(object)
         data = self.df.fillna(magic_num)
         for row_idx, row in data.iterrows():
             for col_idx, col in enumerate(row):
