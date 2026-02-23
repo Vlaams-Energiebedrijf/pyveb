@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 
 [tool.poetry]
-version = "4.0.8"
+version = "4.0.9"
 name = "pyveb"
 authors = ["pieter <pieter.de.petter@veb.be>", "wout <wout.spaas@veb.be>"]
 description = "Package containing common code and reusable components for pipelines and dags"
