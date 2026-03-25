@@ -246,7 +246,7 @@ class sparkClient():
                 data_type = field.dataType
 
                 # keep spark 3 logic, invalid timestamp data -> null
-                if isinstance(data_type, (TimestampType, BooleanType)):
+                if isinstance(data_type, (TimestampType, BooleanType, IntegerType)):
                     df = df.withColumn(
                         col_name,
                         F.expr(f"try_cast(`{col_name}` as {data_type.simpleString()})")
