@@ -1,205 +1,335 @@
-from office365.runtime.auth.user_credential import UserCredential
-from office365.sharepoint.client_context import ClientContext
-from office365.sharepoint.files.file import File 
-from office365.runtime.client_request_exception import ClientRequestException
-from office365.runtime.auth.client_credential import ClientCredential
-
-import os, io, logging, difflib, sys
-from datetime import datetime
+import io
+import json
+import logging
+import sys
 import time
 from dataclasses import dataclass
-from typing import List
+from datetime import datetime, timezone
+from typing import List, Optional, Union
+
+import requests
 
 from pyveb.s3_client import s3Client
 from pyveb.custom_decorators import retry
 from pyveb.common import get_secret
-import json
+
 
 @dataclass
 class sharepointFile:
     name: str
-    last_modified_date: datetime
-    creation_date: datetime
-    url: str
-    uri: str
-    version: str
-    relative_url: str
+    last_modified_date: Optional[datetime]
+    creation_date: Optional[datetime]
+    url: Optional[str]
+    uri: Optional[str]
+    version: Optional[str]
+    relative_url: Optional[str]
 
-class sharepointClient():
+    # Graph-specific fields
+    id: str
+    parent_path: Optional[str]
+    download_url: Optional[str]
+    size: Optional[int]
 
-    def __init__(self, site_url:str, aws_secret_name:str, aws_secret_region = 'eu-west-1' ) -> None:
-        """
-            Initiate a new sharepoint connection to site_url. In general the site_url is the toplevel 'sitepage' one level below the 'forms' or 'document libraries' you're interested in.
 
-            eg. 
-            
-            IF you want to connect to 'Facturatie' folder which is a 'forms' element with URL : https://vlaamsenergiebedrijf.sharepoint.com/leveringen/Marktwerking/Facturatie/Forms/Alle%20documenten.aspx
-            THEN the toplevel sitepage is https://vlaamsenergiebedrijf.sharepoint.com/leveringen/Marktwerking/SitePages/Index.aspx 
-            In this case, the site_url you need to specify is 'https://vlaamsenergiebedrijf.sharepoint.com/leveringen/Marktwerking'
+class sharepointClient:
+    """
+    Microsoft Graph based SharePoint client.
+    """
 
-            LOCAL:  Ensure you've setup SHAREPOINT_USER & SHAREPOINT_PASSWORD env variables ( for actual credentials see AWS arn:aws:secretsmanager:eu-west-1:308089413519:secret:office365/data@veb.be-hsgqh6 )
-            DEV/PRD: ensure SHAREPOINT_USER & SHAREPOINT_PASSWORD  are injected into container via entrypoint.sh 
+    GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0"
+    TOKEN_URL_TEMPLATE = "https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
 
-            2025-09-02: new authentication mechanism required, usercredentials replaced with client credentials. Entra app is created. For each site we want to connect to, for both read and/or write, 
-            we need to allow this via microsoft Graph permissions, see readme within ingest_sharepoint pipeline for full details. 
-         """
-        # try:
-        #     user=os.environ['SHAREPOINT_USER']
-        #     password = os.environ['SHAREPOINT_PASSWORD']
-        #     logging.info('Found sharepoint credentials environment variables')
-        # except KeyError as e:
-        #     logging.error('Couldnot find the required environment variables: SHAREPOINT_USER & SHAREPOINT_PASSWORD. Ensure they;re setup locally or injected into docker container via entrypoint.sh ')
-        # self.user_credentials = UserCredential(user, password)
-        # try:
-        #     self.ctx = ClientContext(site_url).with_credentials(self.user_credentials)
-        #     logging.info(f'Successfully established connection to sharepoint: {site_url}')
-        # except ClientRequestException as e:
-        #     logging.error(f'Issue establishing connection to sharepoint: {site_url}. Exiting...')
-        #     sys.exit(1) 
-        # return
+    def __init__(
+            self,
+            site_path: str,
+            drive_name: str,
+            aws_secret_name: str,
+            aws_secret_region: str = "eu-west-1"
+    ) -> None:
         try:
             secret_details = json.loads(get_secret(aws_secret_name, aws_secret_region))
-            client_id = secret_details['client_id']
-            client_secret = secret_details['client_secret']
+            self.tenant_id = secret_details['tenant_id']
+            self.client_id = secret_details['client_id']
+            self.client_secret = secret_details['client_secret']
 
         except KeyError:
-            logging.error(f'Issue loading Client ID and/or client Secret from aws secret {aws_secret_name}')
+            logging.error(f'Issue loading Tenant ID, Client ID and/or client Secret from aws secret {aws_secret_name}')
             sys.exit(1)
+
+        self._access_token = None
+        self._access_token_expires_at = 0
+
+        self.site_id = self._get_site_id_by_path(site_path)
+        self.drive_name = drive_name
+        self.drive_id = self._get_drive_id_by_name(drive_name)
+        self._drive_base_url = f'{self.GRAPH_BASE_URL}/drives/{self.drive_id}'
+
+    def _get_access_token(self) -> str:
+        """
+        Client credentials flow for Microsoft Graph.
+        """
+        now = int(time.time())
+
+        if self._access_token and now < self._access_token_expires_at - 60:
+            return self._access_token
+
+        token_url = self.TOKEN_URL_TEMPLATE.format(tenant_id=self.tenant_id)
+
+        payload = {
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "scope": "https://graph.microsoft.com/.default",
+            "grant_type": "client_credentials",
+        }
+
+        response = requests.post(token_url, data=payload, timeout=60)
+
         try:
-            self.client_credentials = ClientCredential(client_id, client_secret)
-            self.ctx = ClientContext(site_url).with_credentials(self.client_credentials)
-            logging.info(f'Successfully established connection to SharePoint: {site_url}')
-        except Exception as e:
-            logging.error(f'Issue establishing connection to SharePoint: {site_url} - {e}. Exiting')
-            sys.exit(1)
-        return
+            response.raise_for_status()
+        except requests.HTTPError:
+            logging.error(f"Failed to obtain Graph token: {response.status_code} - {response.text}")
+            raise
 
+        token_data = response.json()
 
+        self._access_token = token_data["access_token"]
+        self._access_token_expires_at = now + int(token_data.get("expires_in", 3599))
+
+        return self._access_token
+
+    def _headers(self) -> dict:
+        return {
+            "Authorization": f"Bearer {self._get_access_token()}",
+            "Accept": "application/json",
+        }
+
+    def _graph_get(self, url: str, stream: bool = False) -> requests.Response:
+        response = requests.get(url, headers=self._headers(), timeout=120, stream=stream)
+
+        try:
+            response.raise_for_status()
+        except requests.HTTPError:
+            logging.error(f"Graph GET failed: {response.status_code} - {response.text}")
+            raise
+
+        return response
+
+    def _graph_put(self, url: str, body: Union[bytes, io.BytesIO]) -> requests.Response:
+        headers = {
+            "Authorization": f"Bearer {self._get_access_token()}",
+            "Accept": "application/json",
+            "Content-Type": "application/octet-stream",
+        }
+
+        response = requests.put(url, headers=headers, data=body, timeout=300)
+
+        try:
+            response.raise_for_status()
+        except requests.HTTPError:
+            logging.error(f"Graph PUT failed: {response.status_code} - {response.text}")
+            raise
+
+        return response
 
     @staticmethod
-    def parse_sharepoint_file_object(obj) -> sharepointFile : 
-        name = obj['Name']
-        last_modified_date = obj['TimeLastModified']
-        creation_date=obj['TimeCreated']
-        url = obj['LinkingUri']
-        uri = obj['LinkingUrl']
-        version = str(obj['MajorVersion'])+'.'+str(obj['MinorVersion'])
-        relative_url = obj['ServerRelativeUrl']
-        sp = sharepointFile(name, last_modified_date, creation_date, url, uri, version, relative_url)
-        return sp
+    def _parse_graph_datetime(value: Optional[str]) -> Optional[datetime]:
+        if not value:
+            return None
+
+        # Graph usually returns ISO strings like: 2026-07-06T10:30:00Z
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+    @staticmethod
+    def parse_sharepoint_file_object(obj: dict) -> sharepointFile:
+        """
+        Parse a Microsoft Graph driveItem into the old sharepointFile shape.
+        """
+        return sharepointFile(
+            name=obj.get("name"),
+            last_modified_date=sharepointClient._parse_graph_datetime(obj.get("lastModifiedDateTime")),
+            creation_date=sharepointClient._parse_graph_datetime(obj.get("createdDateTime")),
+            url=obj.get("webUrl"),
+            uri=obj.get("webUrl"),
+            version=obj.get("eTag"),
+            relative_url=obj.get("parentReference", {}).get("path"),
+            id=obj["id"],
+            parent_path=obj.get("parentReference", {}).get("path"),
+            download_url=obj.get("@microsoft.graph.downloadUrl"),
+            size=obj.get("size"),
+        )
+
+    def _get_site_id_by_path(self, site_url: str) -> str:
+        url = f"{self.GRAPH_BASE_URL}/sites/{site_url}"
+        response = self._graph_get(url)
+        return response.json()["id"]
+
+    def _get_drive_id_by_name(self, drive_name: str) -> str:
+        url = f"{self.GRAPH_BASE_URL}/sites/{self.site_id}/drives"
+
+        drives = []
+
+        while url:
+            response = self._graph_get(url)
+            data = response.json()
+            drives.extend(data.get("value", []))
+            url = data.get("@odata.nextLink")
+
+        matches = [
+            drive for drive in drives
+            if drive.get("name") == drive_name
+        ]
+
+        if not matches:
+            found = [drive.get("name") for drive in drives]
+            raise FileNotFoundError(
+                f"Drive '{drive_name}' not found on site '{self.site_id}'. "
+                f"Found drives: {found}"
+            )
+
+        if len(matches) > 1:
+            raise ValueError(
+                f"Multiple drives named '{drive_name}' found on site '{self.site_id}': "
+                f"{[drive.get('id') for drive in matches]}"
+            )
+
+        return matches[0]["id"]
 
     def list_files(self, folder_prefix: str) -> List[sharepointFile]:
         """
-        List all files in a folder/subfolder/subfolder. The toplevel folder needs to be a Sharepoint 'FORMS' element
+        List files in a SharePoint folder using Microsoft Graph.
 
-        e.g.
-        IF folder URL is https://vlaamsenergiebedrijf.sharepoint.com/leveringen/Marktwerking/Facturatie/Forms/Alle%20documenten.aspx 
-        THEN folder_prefix = 'Facturatie'
+        Example:
+            folder_prefix = "B&O Facturatie"
 
-        IF folder URL is https://vlaamsenergiebedrijf.sharepoint.com/leveringen/Marktwerking/Facturatie/Forms/Alle%20documenten.aspx?id=%2Fleveringen%2FMarktwerking%2FFacturatie%2FB%26O%20Facturatie&viewid=d82816a0%2D29b3%2D433d%2Db6de%2D9585c8984bd9
-        THEN folder_prefix = 'Facturatie/B&O Facturatie
-
-        ARGUMENTS: 
-            folder_prefix: eg. Facturatie/B&O Facturatie
-
-            - prefix can contain spaces
-            - if prefix only contains subfolders and no files None will be returned
-
-        RETURNS
-
-            list of files as namedTuple(sharepointFile, [name, last_modified, creation_date, url, uri, version])
+        Returns only files, not subfolders.
         """
-        libraryRoot = self.ctx.web.get_folder_by_server_relative_url(folder_prefix)
-        print(libraryRoot)
-        print(libraryRoot.folders)
-        self.ctx.load(libraryRoot).execute_query()
-        files = libraryRoot.files
-        self.ctx.load(files).execute_query()
-        parsed_files = [self.parse_sharepoint_file_object(f.properties) for f in files]
-        return parsed_files
-    
-    def match_filename(self, list_files: List[sharepointFile], file_name: str) -> sharepointFile:
-        files_found = [f.name for f in list_files]
-        logging.warning(f'All files in folder: {files_found}')
-        best_match = difflib.get_close_matches(file_name, files_found,1)
-        logging.warning(f'Closest match found: {best_match[0]} for orginal file name {file_name}')
-        best_file = [f for f in list_files if f.name == best_match[0]]
-        return best_file[0]
 
-    @retry(retries=3, error="Error download sharepoint file to s3")
-    def download_to_s3(self, sharepoint_folder_prefix:str, sharepoint_file_name:str, s3_prefix:str, s3_bucket: str ='veb-data-pipelines', **kwargs) -> None:
+        url = f"{self._drive_base_url}/root:/{folder_prefix}:/children"
+
+        items = []
+
+        while url:
+            response = self._graph_get(url)
+            data = response.json()
+
+            items.extend(data.get("value", []))
+            url = data.get("@odata.nextLink")
+
+        files = [
+            self.parse_sharepoint_file_object(item)
+            for item in items
+            if "file" in item
+        ]
+
+        return files
+
+    @retry(retries=3, error="Error download SharePoint file to S3")
+    def download_to_s3(
+        self,
+        file: sharepointFile,
+        s3_prefix: str,
+        s3_bucket: str = "veb-data-pipelines",
+        **kwargs,
+    ) -> None:
         """
-            Downloads a sharepoint file to the provided s3 prefix and bucket. 
-
-            ARGUMENTS:
-                -sharepoint_folder_prefix:  
-                    e.g.
-                        IF folder URL is https://vlaamsenergiebedrijf.sharepoint.com/leveringen/Marktwerking/Facturatie/Forms/Alle%20documenten.aspx 
-                        THEN folder_prefix = 'Facturatie'
-
-                        IF folder URL is https://vlaamsenergiebedrijf.sharepoint.com/leveringen/Marktwerking/Facturatie/Forms/Alle%20documenten.aspx?id=%2Fleveringen%2FMarktwerking%2FFacturatie%2FB%26O%20Facturatie&viewid=d82816a0%2D29b3%2D433d%2Db6de%2D9585c8984bd9
-                        THEN folder_prefix = 'Facturatie/B&O Facturatie
-
-                - s3_prefix: folder/subfolder/
-                - s3_bucket: default veb-data-pipelines
+        Downloads a SharePoint file to S3.
         """
-        files = self.list_files(sharepoint_folder_prefix)
-        file = self.match_filename(files, sharepoint_file_name)
-        current_file = File.open_binary(self.ctx, file.relative_url)
-        bytes_file_obj = io.BytesIO()
-        bytes_file_obj.write(current_file.content)
+
+        # Download via driveItem content endpoint
+        url = f"{self._drive_base_url}/items/{file.id}/content"
+        response = self._graph_get(url, stream=True)
+
+        bytes_file_obj = io.BytesIO(response.content)
         bytes_file_obj.seek(0)
         s3 = s3Client(s3_bucket)
-        file_name = file.name.replace(' ', '_')
-        if s3_prefix.endswith('/'):
+        file_name = file.name.replace(" ", "_")
+        if s3_prefix.endswith("/"):
             key = f'{s3_prefix}{file_name}'
         else:
             key = f'{s3_prefix}/{file_name}'
         s3.client.put_object(Body=bytes_file_obj, Bucket=s3_bucket, Key=key)
-        logging.info(f'Wrote {file.name} to {s3_bucket}/{s3_prefix}/{file_name}')
-        return
-        
-    def upload_to_sharepoint(self, file, sharepoint_folder_prefix:str, file_name:str, file_extension:str, file_suffix_type:str =None, **kwargs) -> str:
+        logging.info(f"Wrote {file.name} to s3://{s3_bucket}/{key}")
+
+    def upload_to_sharepoint(
+        self,
+        file,
+        sharepoint_folder_prefix: str,
+        file_name: str,
+        file_extension: str,
+        file_suffix_type: str = None,
+        **kwargs,
+    ) -> str:
         """
-            Uploads a bytesobject or a local file to sharepoint. 
+        Uploads a bytes object or local file to SharePoint using Microsoft Graph.
 
-            ARGUMENTS 
-                -sharepoint_folder_prefix:  
-                    e.g.
-                        IF folder URL is https://vlaamsenergiebedrijf.sharepoint.com/leveringen/Marktwerking/Facturatie/Forms/Alle%20documenten.aspx 
-                        THEN folder_prefix = 'Facturatie'
+        For files up to 250 MB, Graph supports simple PUT upload.
+        For larger files, this needs to be rewritten to use an upload session.
 
-                        IF folder URL is https://vlaamsenergiebedrijf.sharepoint.com/leveringen/Marktwerking/Facturatie/Forms/Alle%20documenten.aspx?id=%2Fleveringen%2FMarktwerking%2FFacturatie%2FB%26O%20Facturatie&viewid=d82816a0%2D29b3%2D433d%2Db6de%2D9585c8984bd9
-                        THEN folder_prefix = 'Facturatie/B&O Facturatie
+        Example:
+            sharepoint_folder_prefix = "Gedeelde documenten/werkmap"
+            file_name = "terra_extract"
+            file_extension = "xlsx"
 
-                        IF folder URL is https://vlaamsenergiebedrijf.sharepoint.com/data/Gedeelde%20%20documenten/Forms/AllItems.aspx?id=%2Fdata%2FGedeelde%20%20documenten%2Fwerkmap&viewid=e1053b37%2D7bf0%2D4709%2Db252%2D845a5a3773c4
-                        THEN folder_prefix = 'Gedeelde  documenten/werkmap'
-
-                - file_name: name of the object/file on sharepoint, eg. terra_extract
-                - file_extension: file extension, eg. .xlsx
-                - file_suffix_type: optional. Will add a dynamic suffix to the file name. eg current_date will add 2022_03_07 to the file name
-
-                ==> complete file_name will be: terra_extract_2020-03-07.xlsx
-
-            RETURNS
-                url of the file 
-
+        Result:
+            terra_extract.xlsx
         """
-        valid_suffixes = ['current_date', 'unix_timestamp', None]
+        valid_suffixes = ["current_date", "unix_timestamp", None]
         if file_suffix_type not in valid_suffixes:
-            raise ValueError(f'Invalid file suffix provided in config. Accepted values are: {valid_suffixes}')
-        if file_suffix_type == 'current_date':
-            today = datetime.now()
-            formatted_date = today.strftime('%Y-%m-%d')
-            target_suffix = formatted_date
-        if file_suffix_type == 'unix_timestamp':
+            raise ValueError(f"Invalid file suffix provided in config. Accepted values are: {valid_suffixes}")
+
+        target_suffix = None
+
+        if file_suffix_type == "current_date":
+            target_suffix = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        elif file_suffix_type == "unix_timestamp":
             target_suffix = int(time.time())
-        if file_suffix_type:
-            target_name = f'{file_name}_{target_suffix}.{file_extension}'
-        else: 
-            target_name = f'{file_name}.{file_extension}'
-        target_folder = self.ctx.web.get_folder_by_server_relative_url(sharepoint_folder_prefix)
-        target_file = target_folder.upload_file(target_name, file).execute_query()
-        logging.info(f'Uploaded file to {target_file.serverRelativeUrl}')
-        return target_file.serverRelativeUrl
-        
+
+        if target_suffix:
+            target_name = f"{file_name}_{target_suffix}.{file_extension}"
+        else:
+            target_name = f"{file_name}.{file_extension}"
+
+        url = f"{self._drive_base_url}/root:/{sharepoint_folder_prefix}/{target_name}:/content"
+
+        body = self._coerce_file_to_bytes(file)
+
+        # Simple upload limit is 250 MB
+        if len(body) > 250 * 1024 * 1024:
+            raise ValueError(
+                "File is larger than 250 MB. Microsoft Graph simple upload only supports files up to 250 MB. "
+                "Use an upload session for large files."
+            )
+
+        response = self._graph_put(url, body)
+        data = response.json()
+
+        logging.info(f"Uploaded file to SharePoint: {data.get('webUrl')}")
+
+        return data.get("webUrl") or data.get("id")
+
+    @staticmethod
+    def _coerce_file_to_bytes(file) -> bytes:
+        """
+        Accepts:
+            - bytes
+            - BytesIO
+            - file-like object
+            - local file path string
+        """
+        if isinstance(file, bytes):
+            return file
+
+        if isinstance(file, io.BytesIO):
+            file.seek(0)
+            return file.read()
+
+        if hasattr(file, "read"):
+            return file.read()
+
+        if isinstance(file, str):
+            with open(file, "rb") as f:
+                return f.read()
+
+        raise TypeError(
+            "Unsupported file type. Expected bytes, BytesIO, file-like object, or local file path string."
+        )
