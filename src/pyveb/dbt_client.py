@@ -470,7 +470,7 @@ class dbtClient():
                     res_dict = json.loads(res.text)
                     res_data = res_dict.get('data', None)
                     res.close()
-                    if res_data:
+                    if res_data is not None:
                         res_pagination = res_dict.get('extra', None)
                         logging.critical(res_pagination)
                         return res_data, res_pagination
@@ -525,12 +525,14 @@ class dbtClient():
 
         while True :
             data, _ = self._make_request(endpoint, pagination_params={"limit": limit, "offset": offset}, **kwargs)
+            if not data:
+                break
             for record in data:
                 all_records.append(record)
-                total_fetched_records += 1
-                if total_fetched_records == total_records_to_fetch:
-                    return all_records
+            if len(data) < limit:  # short page = last page
+                break
             offset += limit
+        return all_records
 
     def get_jobs(self):
         """
