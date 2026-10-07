@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: '3.13.12'
       - name: Install Poetry
-        uses: snok/install-poetry@v1
+        uses: snok/install-poetry@a783c322200f0519c7926aa6faa857c4e23e9263 # v1.4.2
       - name: bump version
         run: poetry version patch
       - name: Commit bumped version
@@ -31,11 +31,11 @@ jobs:
       - name: build with poetry
         run: poetry build
       - name: Publish a Python distribution to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
       - name: Commit bumped version
-        uses: EndBug/add-and-commit@v9 
+        uses: EndBug/add-and-commit@a94899bca583c204427a224a7af87c02f9b325d5 # v9.1.4
         with:
           author_name: Github CICD Action 
           committer_name: Github CICD Action 
