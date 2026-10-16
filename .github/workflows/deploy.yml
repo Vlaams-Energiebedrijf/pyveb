@@ -6,6 +6,7 @@ on:
       - 'main'
     paths: # only trigger docker builds when changes are made to src
       - 'src/pyveb/**'
+      - 'pyproject.toml'
 
 jobs:
   build-and-push:
@@ -22,7 +23,7 @@ jobs:
       - name: bump version
         run: poetry version patch
       - name: Commit bumped version
-        uses: EndBug/add-and-commit@v9 
+        uses: EndBug/add-and-commit@a94899bca583c204427a224a7af87c02f9b325d5 # v9.1.4
         with:
           add: '*.toml'
           author_name: Github CICD Action 
