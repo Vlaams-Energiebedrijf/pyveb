@@ -45,7 +45,7 @@ class sparkClient():
 
         # https://issues.apache.org/jira/browse/SPARK-27570
         # https://stackoverflow.com/questions/58619600/spark-parquet-read-error-java-io-eofexception-reached-the-end-of-stream-with
-    
+
         is_aws_batch = bool(
             os.environ.get("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI")
             or os.environ.get("AWS_CONTAINER_CREDENTIALS_FULL_URI")
@@ -60,7 +60,7 @@ class sparkClient():
                             .config("spark.sql.session.timeZone", "UTC") \
                             .config("spark.sql.legacy.parquet.datetimeRebaseModeInRead", "LEGACY") \
                             .config("spark.sql.parquet.int96RebaseModeInWrite", "LEGACY")\
-                            .config("spark.hadoop.fs.s3a.aws.credentials.provider", "org.apache.hadoop.fs.s3a.auth.ProfileAWSCredentialsProvider")\
+                            .config("spark.hadoop.fs.s3a.aws.credentials.provider", "software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider")\
                             .config("spark.hadoop.fs.s3a.experimental.input.fadvise", "sequential")\
                             .getOrCreate()
 
