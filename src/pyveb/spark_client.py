@@ -3,7 +3,6 @@ import pandas as pd
 import shutil, os
 import logging
 from datetime import datetime, timezone
-from time import time
 from functools import reduce
 import psutil
 import json
@@ -17,7 +16,6 @@ import pyspark.sql.functions as F
 from pyspark.sql.functions import udf
 from pyspark.sql.types import (StructType, StructField, StringType, IntegerType, BooleanType, TimestampType, DoubleType,
                                DecimalType, ArrayType, BinaryType, LongType, DateType)
-import boto3
 
 from . import s3_client
 
@@ -34,19 +32,6 @@ class sparkClient():
     def __init__(self, env:str, **kwargs):
         self.env = env
         self.spark = self._create_spark_session()
-        return None
-
-    def _get_temp_batch_credentials(self ):
-        # Wen we run from AWS batch, we're assuming a role. However, we cannot get temp credentials via an assumed role. 
-        # Hence, we hence we get the current credentials of the assumed role. In case we do not get a session token, most likely we're running 
-        # from long term credentials so we try to build a session via 'local'
-        # https://stackoverflow.com/questions/36287720/boto3-get-credentials-dynamically
-        # https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html#configuring-credentials
-        # https://stackoverflow.com/questions/64808568/boto3-session-get-credentials-is-not-returning-token#:~:text=The%20cause%20is%20that%20you,or%20an%20EC2%20instance%20role.
-        # https://www.websitebuilderinsider.com/how-do-i-get-my-aws-session-token/
-        session = boto3.Session()
-        frozen = session.get_credentials().get_frozen_credentials()
-        return frozen.access_key, frozen.secret_key, frozen.token
 
     def _create_spark_session(self):
         """
@@ -57,20 +42,25 @@ class sparkClient():
         """
          # https://stackoverflow.com/questions/50891509/apache-spark-codegen-stage-grows-beyond-64-kb 
         nbr_cores = self._get_nbr_cores()
-        access_key, secret_key, session_token = self._get_temp_batch_credentials()
 
         # https://issues.apache.org/jira/browse/SPARK-27570
-        # https://stackoverflow.com/questions/58619600/spark-parquet-read-error-java-io-eofexception-reached-the-end-of-stream-with 
+        # https://stackoverflow.com/questions/58619600/spark-parquet-read-error-java-io-eofexception-reached-the-end-of-stream-with
+
+        is_aws_batch = bool(
+            os.environ.get("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI")
+            or os.environ.get("AWS_CONTAINER_CREDENTIALS_FULL_URI")
+        )
         try:
-            if self.env == 'local' or not session_token:
+            if not is_aws_batch:
                 logging.info('Building spark session w ProfileCredentialsProvider for S3 access')
                 spark = SparkSession.builder.master(f"local[{nbr_cores}]") \
                             .appName(f'Spark_{str(uuid.uuid4())}') \
+                            .config("spark.ui.enabled", "false") \
                             .config('spark.sql.codegen.wholeStage', 'false') \
                             .config("spark.sql.session.timeZone", "UTC") \
                             .config("spark.sql.legacy.parquet.datetimeRebaseModeInRead", "LEGACY") \
                             .config("spark.sql.parquet.int96RebaseModeInWrite", "LEGACY")\
-                            .config("spark.hadoop.fs.s3a.aws.credentials.provider","com.amazonaws.auth.profile.ProfileCredentialsProvider")\
+                            .config("spark.hadoop.fs.s3a.aws.credentials.provider", "software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider")\
                             .config("spark.hadoop.fs.s3a.experimental.input.fadvise", "sequential")\
                             .getOrCreate()
 
@@ -79,15 +69,13 @@ class sparkClient():
                 logging.info('Building spark session w TemporaryAWSCredentialsProvider for S3 access')
                 spark = SparkSession.builder.master(f"local[{nbr_cores}]") \
                             .appName(f'Spark_{str(uuid.uuid4())}') \
+                            .config("spark.ui.enabled", "false") \
                             .config('spark.sql.codegen.wholeStage', 'false') \
                             .config("spark.sql.session.timeZone", "UTC") \
                             .config("spark.sql.legacy.parquet.datetimeRebaseModeInRead", "LEGACY") \
                             .config("spark.sql.parquet.int96RebaseModeInWrite", "LEGACY")\
-                            .config('spark.hadoop.fs.s3a.aws.credentials.provider', 'org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider')\
+                            .config('spark.hadoop.fs.s3a.aws.credentials.provider', 'org.apache.hadoop.fs.s3a.auth.IAMInstanceCredentialsProvider')\
                             .config("spark.hadoop.fs.s3a.experimental.input.fadvise", "sequential")\
-                            .config('spark.hadoop.fs.s3a.access.key', access_key)\
-                            .config('spark.hadoop.fs.s3a.secret.key', secret_key)\
-                            .config('spark.hadoop.fs.s3a.session.token', session_token)\
                             .getOrCreate()  
 
             spark.sparkContext.setLogLevel("ERROR")
