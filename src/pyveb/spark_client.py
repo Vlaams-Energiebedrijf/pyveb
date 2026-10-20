@@ -44,9 +44,14 @@ class sparkClient():
         nbr_cores = self._get_nbr_cores()
 
         # https://issues.apache.org/jira/browse/SPARK-27570
-        # https://stackoverflow.com/questions/58619600/spark-parquet-read-error-java-io-eofexception-reached-the-end-of-stream-with 
+        # https://stackoverflow.com/questions/58619600/spark-parquet-read-error-java-io-eofexception-reached-the-end-of-stream-with
+    
+        is_aws_batch = bool(
+            os.environ.get("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI")
+            or os.environ.get("AWS_CONTAINER_CREDENTIALS_FULL_URI")
+        )
         try:
-            if self.env == 'local':
+            if not is_aws_batch:
                 logging.info('Building spark session w ProfileCredentialsProvider for S3 access')
                 spark = SparkSession.builder.master(f"local[{nbr_cores}]") \
                             .appName(f'Spark_{str(uuid.uuid4())}') \
