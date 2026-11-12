@@ -24,11 +24,11 @@ Package is automaticly deployed to pypi via github actions. Just commit and open
 
 ! in case a dependency is added to pyproject.toml, no workflow is started unless there are also changes to src/pyveb/** 
 
+# SQL scripts
 
+Naast het package bevat deze repo ook SQL die manueel uitgevoerd werd, ter traceerbaarheid.
+Deze map valt buiten `src/pyveb/**`: ze wordt niet gepackaged en triggert geen deploy.
 
-
-
-
-
-
-
+- `sql/redshift/datashare_prd_to_dev/`: datashare van Redshift PRD naar DEV
+  (`terdwh_prd_datashare` read-only, `terdwh_uat` read/write), uitgevoerd op 2026-10-15.
+  Scripts in uitvoeringsvolgorde; context, verbeterpunten en next steps staan bovenaan elk script.
